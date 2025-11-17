@@ -1,0 +1,44 @@
+# Fulmen Application Identity
+# This file defines the core identity metadata for the Tuvan workhorse template.
+#
+# CDRL INSTRUCTIONS:
+# When customizing this template for your application:
+# 1. Update 'vendor' to your organization name
+# 2. Update 'binary_name' to your application name (lowercase, hyphens allowed)
+# 3. Update 'env_prefix' to your uppercase environment variable prefix
+# 4. Update 'config_name' to match your binary name (usually the same)
+#
+# Example for a company "AcmeCorp" building an API called "data-api":
+#   app:
+#     vendor: acmecorp
+#     binary_name: data-api
+#     env_prefix: DATA_API_
+#     config_name: data-api
+#     description: "AcmeCorp Data API"
+#
+# The rest of the codebase will automatically use these values for:
+# - CLI command names (e.g., 'tuvan serve' → 'data-api serve')
+# - Environment variable prefixes (e.g., TUVAN_PORT → DATA_API_PORT)
+# - Config file paths (e.g., ~/.config/fulmen/tuvan → ~/.config/acmecorp/data-api)
+# - Telemetry namespaces (e.g., tuvan_http_requests_total → data_api_http_requests_total)
+
+app:
+  vendor: fulmen
+  binary_name: tuvan
+  env_prefix: TUVAN_
+  config_name: tuvan
+  description: "TypeScript workhorse template for production-ready backends"
+
+metadata:
+  repository_category: workhorse
+
+  # Template info (users can remove this section after refitting)
+  template:
+    source: forge-workhorse-tuvan
+    breed: tuvan
+    breed_origin: "Tuvan horse from Russian steppe (Tuva Republic)"
+    characteristics:
+      - "Exceptional strength and endurance"
+      - "Stamina for long-distance work"
+      - "Hardy constitution"
+      - "Reliability in demanding environments"
