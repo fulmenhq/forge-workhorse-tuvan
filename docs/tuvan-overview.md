@@ -224,6 +224,8 @@ The template is designed for CDRL (Clone → Degit → Refit → Launch):
    ```
 4. **Launch**: Run your customized application
 
+Refer to the [Fulmen CDRL Guide](development/fulmen_cdrl_guide.md) for a detailed, step-by-step walkthrough of each phase. Once you've completed your own refit and no longer plan to distribute a reusable template, you can remove `docs/development/fulmen_cdrl_guide.md` from your project to avoid shipping internal guidance.
+
 ### Identity-Driven Customization
 
 All application surfaces automatically adapt to your identity:
@@ -436,7 +438,7 @@ const customHistogram = histogram('custom_duration_seconds');
 ### Documentation
 
 - [README.md](../README.md) - Project overview and quick start
-- [CDRL Guide](development/fulmen_cdrl_guide.md) - Template customization guide (to be created)
+- [CDRL Guide](development/fulmen_cdrl_guide.md) - Full Clone → Degit → Refit → Launch instructions (safe to delete after refit if you ship a single app)
 - [DEVELOPMENT.md](../DEVELOPMENT.md) - Development handbook (to be created)
 
 ### Standards & Specifications

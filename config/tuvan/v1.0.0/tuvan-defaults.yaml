@@ -1,0 +1,54 @@
+# ---
+# version: tuvan@0.1.0
+# schema: https://fulmenhq.dev/schemas/tuvan/v1.0.0/config.schema.json
+# standard: Fulmen Forge Workhorse Standard
+# layer: defaults (Layer 1 of 3)
+# ---
+#
+# Tuvan Workhorse Default Configuration (Layer 1)
+#
+# This file provides sensible defaults for all configuration options.
+# Users can override these values via:
+#   - User config: ~/.config/fulmen/tuvan/config.yaml (Layer 2)
+#   - Environment variables: TUVAN_* (Layer 3)
+#   - CLI flags: --host, --port, etc. (Layer 3)
+#
+# Priority: CLI flags > Env vars > User config > Template defaults
+#
+# SemVer: This config is tied to tuvan@0.1.0. Major version bumps may
+#         introduce breaking config changes; minor/patch versions maintain
+#         backward compatibility.
+
+# HTTP Server Configuration
+server:
+  # Host to bind to (default: localhost for security)
+  # Production: Set to "0.0.0.0" to accept external connections
+  host: localhost
+
+  # Port to listen on
+  port: 8080
+
+# Logging Configuration
+logging:
+  # Profile: simple (CLI), structured (server), enterprise (full envelope)
+  # See: https://github.com/fulmenhq/tsfulmen/tree/main/src/logging
+  profile: structured
+
+  # Minimum log level: trace, debug, info, warn, error, fatal
+  level: info
+
+# Metrics Configuration
+metrics:
+  # Enable Prometheus metrics collection
+  enabled: true
+
+  # Metrics endpoint port
+  # - 0: Share server port (metrics at http://host:port/metrics)
+  # - 1-65535: Dedicated port (isolated metrics endpoint)
+  port: 0
+
+# Telemetry Configuration
+telemetry:
+  # Telemetry namespace (automatically set from app identity)
+  # Override only if you need custom metric prefixes
+  namespace: tuvan

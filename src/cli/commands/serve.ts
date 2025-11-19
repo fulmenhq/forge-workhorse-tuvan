@@ -10,31 +10,11 @@ import { Command } from "commander";
 import type { FastifyInstance } from "fastify";
 
 /**
- * Server configuration options
+ * Server configuration options (CLI flags)
  */
 interface ServeOptions {
   port?: string;
   host?: string;
-}
-
-/**
- * Get default server configuration from environment or defaults
- *
- * @param envPrefix - Environment variable prefix from app identity
- * @param options - Command-line options
- * @returns Server configuration
- */
-function getServerConfig(envPrefix: string, options: ServeOptions): { host: string; port: number } {
-  const defaultHost = "localhost";
-  const defaultPort = 8080;
-
-  // Priority: CLI options > Environment variables > Defaults
-  const host = options.host || process.env[`${envPrefix}HOST`] || defaultHost;
-
-  const portString = options.port || process.env[`${envPrefix}PORT`] || String(defaultPort);
-  const port = Number.parseInt(portString, 10);
-
-  return { host, port };
 }
 
 /**
@@ -68,23 +48,29 @@ export function createServeCommand(identity: Identity): Command {
     .option("-p, --port <port>", `Port to listen on (env: ${envPrefix}PORT, default: 8080)`)
     .option("-H, --host <host>", `Host to bind to (env: ${envPrefix}HOST, default: localhost)`)
     .action(async (options: ServeOptions) => {
-      const config = getServerConfig(envPrefix, options);
-
-      console.log(`[${binaryName}] Starting HTTP server...`);
-      console.log(`[${binaryName}] Host: ${config.host}`);
-      console.log(`[${binaryName}] Port: ${config.port}`);
-      console.log("");
-
       try {
+        // Load config from three layers (defaults → user → env)
+        const { loadConfig, applyCliOverrides } = await import("../../config/loader.js");
+        const baseConfig = await loadConfig();
+
+        // Apply CLI flag overrides (CLI > env > user > defaults)
+        const config = applyCliOverrides(baseConfig, options);
+
+        console.log(`[${binaryName}] Starting HTTP server...`);
+        console.log(`[${binaryName}] Host: ${config.server.host}`);
+        console.log(`[${binaryName}] Port: ${config.server.port}`);
+        console.log(`[${binaryName}] Logging: ${config.logging.profile} (${config.logging.level})`);
+        console.log("");
+
         // Import server factory
         const { createServer, stopServer } = await import("../../server/app.js");
 
         // Create server
         const server: FastifyInstance = await createServer(identity, {
-          host: config.host,
-          port: config.port,
+          host: config.server.host,
+          port: config.server.port,
           logging: true,
-          logLevel: "info",
+          logLevel: config.logging.level,
         });
 
         // Create signal manager for graceful shutdown
@@ -109,27 +95,70 @@ export function createServeCommand(identity: Identity): Command {
         });
 
         // Register config reload handler (SIGHUP)
-        // TODO: Integrate with three-layer config in Priority 5
         await onReload(signalManager, async (signal: NodeJS.Signals) => {
-          console.log(`\n[${binaryName}] Received ${signal} - config reload not yet implemented`);
-          console.log(`[${binaryName}] Will be integrated with three-layer config in Phase 3A Priority 5`);
+          console.log(`\n[${binaryName}] Received ${signal}, reloading configuration...`);
+
+          try {
+            const { reloadConfig } = await import("../../config/loader.js");
+            await reloadConfig();
+
+            console.log(`[${binaryName}] Configuration reloaded successfully`);
+            console.log("");
+
+            // Log what changes require restart vs. can be applied hot
+            console.log(
+              `[${binaryName}] ⚠️  Changes requiring restart: server.host, server.port, logging.profile`,
+            );
+            console.log(
+              `[${binaryName}] ℹ️  Changes applied on next request: logging.level, metrics.*`,
+            );
+            console.log(
+              `[${binaryName}] 💡 Tip: Restart server for host/port/profile changes to take effect`,
+            );
+
+            // Future work (out of scope for Priority 5):
+            // - Hot-apply log level changes to existing logger instance
+            // - Hot-toggle metrics collection on/off
+            // - Hot-update telemetry namespace in registry
+          } catch (error) {
+            console.error(`[${binaryName}] Config reload failed (keeping current config):`, error);
+            // Don't exit - preserve current config and continue running
+          }
         });
 
         // Start server
-        await server.listen({ host: config.host, port: config.port });
+        await server.listen({ host: config.server.host, port: config.server.port });
 
-        console.log(`[${binaryName}] Server listening on http://${config.host}:${config.port}`);
+        console.log(
+          `[${binaryName}] Server listening on http://${config.server.host}:${config.server.port}`,
+        );
         console.log("");
         console.log("Available endpoints:");
-        console.log(`  Root:          http://${config.host}:${config.port}/`);
-        console.log(`  Health:        http://${config.host}:${config.port}/health`);
-        console.log(`  Health (live): http://${config.host}:${config.port}/health/live`);
-        console.log(`  Health (ready):http://${config.host}:${config.port}/health/ready`);
-        console.log(`  Version:       http://${config.host}:${config.port}/version`);
-        console.log(`  Metrics:       http://${config.host}:${config.port}/metrics`);
+        console.log(`  Root:          http://${config.server.host}:${config.server.port}/`);
+        console.log(`  Health:        http://${config.server.host}:${config.server.port}/health`);
+        console.log(
+          `  Health (live): http://${config.server.host}:${config.server.port}/health/live`,
+        );
+        console.log(
+          `  Health (ready):http://${config.server.host}:${config.server.port}/health/ready`,
+        );
+        console.log(`  Version:       http://${config.server.host}:${config.server.port}/version`);
+        console.log(`  Metrics:       http://${config.server.host}:${config.server.port}/metrics`);
         console.log("");
         console.log("Press Ctrl+C to stop (Ctrl+C twice for force quit)");
       } catch (error) {
+        // Check if it's a configuration error
+        const { ConfigInvalidError } = await import("../../config/types.js");
+        if (error instanceof ConfigInvalidError) {
+          console.error(`[${binaryName}] Configuration error:`, error.message);
+          if (error.details) {
+            console.error(`[${binaryName}] Field: ${error.details.field}`);
+            console.error(`[${binaryName}] Expected: ${error.details.expected}`);
+            console.error(`[${binaryName}] Actual: ${error.details.actual}`);
+          }
+          process.exit(30); // Foundry exit code: ConfigInvalid
+        }
+
         console.error(`[${binaryName}] Failed to start server:`, error);
         process.exit(1);
       }

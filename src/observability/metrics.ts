@@ -89,9 +89,7 @@ export function initializeMetrics(identity: Identity): FastifyPluginCallback {
  */
 export function getPrometheusExporter(): PrometheusExporter {
   if (!prometheusExporter) {
-    throw new Error(
-      "Metrics not initialized. Call initializeMetrics(identity) first.",
-    );
+    throw new Error("Metrics not initialized. Call initializeMetrics(identity) first.");
   }
   return prometheusExporter;
 }

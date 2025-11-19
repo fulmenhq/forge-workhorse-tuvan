@@ -14,13 +14,13 @@
 
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import {
-  type Logger as TSFulmenLogger,
-  LoggingProfile,
-  RedactSecretsMiddleware,
+  createStructuredLoggerWithRedaction,
   createLogger as createTSFulmenLogger,
   createSimpleLogger as createTSFulmenSimpleLogger,
   createStructuredLogger as createTSFulmenStructuredLogger,
-  createStructuredLoggerWithRedaction,
+  LoggingProfile,
+  RedactSecretsMiddleware,
+  type Logger as TSFulmenLogger,
 } from "@fulmenhq/tsfulmen/logging";
 
 /**
@@ -185,9 +185,7 @@ export function initializeLogger(
  */
 export function getLogger(): TSFulmenLogger {
   if (!logger) {
-    throw new Error(
-      "Logger not initialized. Call initializeLogger(identity, profile) first.",
-    );
+    throw new Error("Logger not initialized. Call initializeLogger(identity, profile) first.");
   }
   return logger;
 }

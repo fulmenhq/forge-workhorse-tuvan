@@ -37,9 +37,7 @@ export function getVersion(): string {
   } catch {
     // Fallback to package.json
     try {
-      const packageJson = JSON.parse(
-        readFileSync(join(process.cwd(), "package.json"), "utf-8"),
-      );
+      const packageJson = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8"));
       version = packageJson.version || "0.0.0";
     } catch {
       version = "0.0.0";

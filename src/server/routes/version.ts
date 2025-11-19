@@ -46,7 +46,6 @@ export interface VersionResponse {
   };
 }
 
-
 /**
  * Get tsfulmen version from package.json
  */

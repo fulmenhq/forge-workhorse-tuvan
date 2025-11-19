@@ -15,7 +15,12 @@ import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import type { FastifyInstance, FastifyServerOptions } from "fastify";
 import Fastify from "fastify";
 import { getVersion } from "../core/version.js";
-import { LoggingProfile, getLogger, initializeLogger, isLoggerInitialized } from "../observability/logger.js";
+import {
+  getLogger,
+  initializeLogger,
+  isLoggerInitialized,
+  LoggingProfile,
+} from "../observability/logger.js";
 import { initializeMetrics } from "../observability/metrics.js";
 
 /**
@@ -194,17 +199,13 @@ export async function createServer(
   server.setErrorHandler(
     async (error: Error & { statusCode?: number; code?: string }, request, reply) => {
       // Log error with tsfulmen logger (security middleware will redact sensitive data)
-      logger.error(
-        "Request error",
-        error,
-        {
-          requestId: request.id,
-          method: request.method,
-          url: request.url,
-          statusCode: error.statusCode || 500,
-          errorCode: error.code,
-        },
-      );
+      logger.error("Request error", error, {
+        requestId: request.id,
+        method: request.method,
+        url: request.url,
+        statusCode: error.statusCode || 500,
+        errorCode: error.code,
+      });
 
       // Don't leak error details in production
       const isDevelopment = process.env.NODE_ENV !== "production";

@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fulmenhq.dev/schemas/tuvan/v1.0.0/config.schema.json",
+  "title": "Tuvan Workhorse Configuration",
+  "description": "Configuration schema for Tuvan TypeScript workhorse template (SemVer: 0.1.0)",
+  "type": "object",
+  "required": ["server", "logging"],
+  "properties": {
+    "server": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Host to bind HTTP server to",
+          "default": "localhost",
+          "examples": ["localhost", "0.0.0.0", "127.0.0.1"]
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port number for HTTP server",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8080
+        }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "required": ["profile", "level"],
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/loggingProfile"
+        },
+        "level": {
+          "$ref": "#/$defs/logLevel"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Prometheus metrics collection",
+          "default": true
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port for metrics endpoint",
+          "$comment": "Special value 0 means reuse server.port (single endpoint for HTTP + metrics). Values 1-65535 create isolated metrics endpoint.",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "Telemetry namespace (auto-set from app identity)",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "default": "tuvan"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "loggingProfile": {
+      "type": "string",
+      "description": "Logging profile from tsfulmen (aligned with Crucible logging standard)",
+      "enum": ["simple", "structured", "enterprise"],
+      "default": "structured"
+    },
+    "logLevel": {
+      "type": "string",
+      "description": "Minimum log level (aligned with Crucible logging standard)",
+      "enum": ["trace", "debug", "info", "warn", "error", "fatal"],
+      "default": "info"
+    }
+  }
+}
