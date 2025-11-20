@@ -137,6 +137,11 @@ export async function createServer(
   server.addHook("onSend", async (request, reply) => {
     const duration = Date.now() - (request.requestTime || Date.now());
     reply.header("x-response-time", `${duration}ms`);
+
+    // Ensure request ID is returned in response headers for correlation
+    if (request.id) {
+      reply.header("x-request-id", request.id);
+    }
   });
 
   // Log request completion with tsfulmen logger

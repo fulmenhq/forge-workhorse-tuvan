@@ -24,13 +24,13 @@ Tuvan is a production-ready TypeScript workhorse application template from the F
 
 | Component           | Status              | Purpose                                                                        | Key Features                                                               |
 | ------------------- | ------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| **HTTP Server**     | 🚧 Planned          | Fastify router with standard endpoints, graceful shutdown, middleware support | TypeScript-first, high performance, plugin ecosystem                       |
-| **CLI Framework**   | 🚧 Planned          | Commander.js-based commands (serve, version, health, envinfo, doctor)          | Simple API, TypeScript-friendly, extensible                                |
-| **Configuration**   | 🚧 Planned          | Defaults → file → environment variables with XDG compliance                    | Three-layer loading, schema validation, hot reload                         |
-| **Observability**   | 🚧 Planned          | Structured logging, Prometheus metrics, health checks                          | Pino-based logging, Request correlation, OTLP export                       |
-| **Signal Handling** | 🚧 Planned          | Graceful shutdown, config reload, double-tap force quit                        | Cross-platform, LIFO cleanup, HTTP admin endpoint                          |
-| **App Identity**    | 🚧 Planned          | `.fulmen/app.yaml` for template customization                                  | Dynamic env vars, config paths, telemetry namespaces                       |
-| **Exit Codes**      | 🚧 Planned          | Foundry exit codes with semantic meaning                                       | Shell script friendly, metadata logging, operational clarity               |
+| **HTTP Server**     | ✅ Implemented      | Fastify router with standard endpoints, graceful shutdown, middleware support | TypeScript-first, high performance, plugin ecosystem                       |
+| **CLI Framework**   | ✅ Implemented      | Commander.js-based commands (serve, version, health, envinfo, doctor)          | Simple API, TypeScript-friendly, extensible                                |
+| **Configuration**   | ✅ Implemented      | Defaults → file → environment variables with XDG compliance                    | Three-layer loading, schema validation, hot reload                         |
+| **Observability**   | ✅ Implemented      | Structured logging, Prometheus metrics, health checks                          | Pino-based logging, Request correlation, OTLP export                       |
+| **Signal Handling** | ✅ Implemented      | Graceful shutdown, config reload, double-tap force quit                        | Cross-platform, LIFO cleanup, HTTP admin endpoint                          |
+| **App Identity**    | ✅ Implemented      | `.fulmen/app.yaml` for template customization                                  | Dynamic env vars, config paths, telemetry namespaces                       |
+| **Exit Codes**      | ✅ Implemented      | Foundry exit codes with semantic meaning                                       | Shell script friendly, metadata logging, operational clarity               |
 
 ### Standard Endpoints
 
@@ -61,15 +61,15 @@ All non-2xx responses share a standardized error envelope ensuring consistent JS
 
 | Module                   | Integration | Benefits                                             |
 | ------------------------ | ----------- | ---------------------------------------------------- |
-| **tsfulmen/appidentity** | 🚧 Planned  | Dynamic app name, config paths, env var prefixes     |
-| **tsfulmen/logging**     | 🚧 Planned  | SIMPLE → STRUCTURED → ENTERPRISE profiles            |
-| **tsfulmen/config**      | 🚧 Planned  | Three-layer loading with validation                  |
-| **tsfulmen/telemetry**   | 🚧 Planned  | Counters, gauges, histograms with Prometheus export  |
-| **tsfulmen/signals**     | 🚧 Planned  | Cross-platform graceful shutdown and config reload   |
-| **tsfulmen/foundry**     | 🚧 Planned  | Exit codes, HTTP statuses, MIME types, patterns      |
-| **tsfulmen/crucible**    | 🚧 Planned  | Schema validation, standards access                  |
-| **tsfulmen/errors**      | 🚧 Planned  | Structured error types with severity and propagation |
-| **tsfulmen/pathfinder**  | 🚧 Planned  | Safe filesystem traversal with checksums             |
+| **tsfulmen/appidentity** | ✅ Complete | Dynamic app name, config paths, env var prefixes     |
+| **tsfulmen/logging**     | ✅ Complete | SIMPLE → STRUCTURED → ENTERPRISE profiles            |
+| **tsfulmen/config**      | ✅ Complete | Three-layer loading with validation                  |
+| **tsfulmen/telemetry**   | ✅ Complete | Counters, gauges, histograms with Prometheus export  |
+| **tsfulmen/signals**     | ✅ Complete | Cross-platform graceful shutdown and config reload   |
+| **tsfulmen/foundry**     | ✅ Complete | Exit codes, HTTP statuses, MIME types, patterns      |
+| **tsfulmen/crucible**    | ✅ Complete | Schema validation, standards access                  |
+| **tsfulmen/errors**      | ✅ Complete | Structured error types with severity and propagation |
+| **tsfulmen/pathfinder**  | ✅ Complete | Safe filesystem traversal with checksums             |
 
 ### External Dependencies
 
@@ -396,42 +396,44 @@ const customHistogram = histogram('custom_duration_seconds');
 
 ### Fulmen Forge Workhorse Standard
 
-- 🚧 **App Identity**: `.fulmen/app.yaml` with dynamic configuration
-- 🚧 **Signal Handling**: Cross-platform graceful shutdown and reload
-- 🚧 **Exit Codes**: Standardized foundry exit codes
-- 🚧 **Observability**: Structured logging and metrics
-- 🚧 **Configuration**: Three-layer loading with XDG compliance
-- 🚧 **CLI Framework**: Standard commands and help system
+- ✅ **App Identity**: `.fulmen/app.yaml` with dynamic configuration
+- ✅ **Signal Handling**: Cross-platform graceful shutdown and reload
+- ✅ **Exit Codes**: Standardized foundry exit codes
+- ✅ **Observability**: Structured logging and metrics
+- ✅ **Configuration**: Three-layer loading with XDG compliance
+- ✅ **CLI Framework**: Standard commands and help system
 
 ### Crucible Integration
 
-- 🚧 **Schema Validation**: Embedded Crucible schemas for validation
-- 🚧 **Standards Access**: Programmatic access to Crucible standards
-- 🚧 **Version Alignment**: Synchronized with Crucible releases
+- ✅ **Schema Validation**: Embedded Crucible schemas for validation
+- ✅ **Standards Access**: Programmatic access to Crucible standards
+- ✅ **Version Alignment**: Synchronized with Crucible releases
 
 ## Current Status
 
-🚧 **In Development** - Bootstrap phase active
+✅ **v0.1.0 Released** - Production Ready
 
 **Completed:**
 - ✅ Project planning and architecture
 - ✅ Bootstrap plan documentation
 - ✅ README and overview documentation
 - ✅ .plans/ directory structure
+- ✅ Project structure setup
+- ✅ TypeScript configuration
+- ✅ Dependency installation
+- ✅ CLI framework implementation
+- ✅ HTTP server with Fastify
+- ✅ Standard endpoints
+- ✅ Configuration management
+- ✅ Observability integration
+- ✅ Testing suite
+- ✅ CI/CD setup
 
 **In Progress:**
-- 🚧 Project structure setup
-- 🚧 TypeScript configuration
-- 🚧 Dependency installation
+- 🚀 v0.1.x maintenance and refinement
 
 **Planned:**
-- 📋 CLI framework implementation
-- 📋 HTTP server with Fastify
-- 📋 Standard endpoints
-- 📋 Configuration management
-- 📋 Observability integration
-- 📋 Testing suite
-- 📋 CI/CD setup
+- 📋 Additional production patterns (Phase 5)
 
 ## Resources
 

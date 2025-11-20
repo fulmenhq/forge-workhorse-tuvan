@@ -12,12 +12,10 @@
  * tsfulmen/config module provides three-layer loading support.
  */
 
-import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { loadIdentity } from "@fulmenhq/tsfulmen/appidentity";
+import { loadConfig as tsfulmenLoadConfig } from "@fulmenhq/tsfulmen/config";
 import { createStructuredLogger } from "@fulmenhq/tsfulmen/logging";
-// TODO: Add tuvan_config_reload_total to Tuvan metrics taxonomy
-// import { metrics } from "@fulmenhq/tsfulmen/telemetry";
-import { parse as parseYaml } from "yaml";
 import type { ConfigMetadata, ConfigWithMetadata, TuvanConfig } from "./types.js";
 import { ConfigInvalidError } from "./types.js";
 
@@ -39,7 +37,10 @@ function getLogger() {
 /**
  * Load configuration from all three layers
  *
- * Currently implements Layer 1 (defaults) only.
+ * Layers:
+ * 1. Defaults: config/tuvan/v1.0.0/tuvan-defaults.yaml
+ * 2. User: ~/.config/fulmen/tuvan/config.yaml (XDG paths)
+ * 3. Env: TUVAN_* environment variables
  *
  * @returns Fully merged and validated config
  * @throws ConfigInvalidError if config validation fails
@@ -48,50 +49,62 @@ export async function loadConfig(): Promise<TuvanConfig> {
   const logger = getLogger();
   const identity = await loadIdentity();
 
-  const defaultsPath = "config/tuvan/v1.0.0/tuvan-defaults.yaml";
+  const defaultsPath = resolve("config/tuvan/v1.0.0/tuvan-defaults.yaml");
+  const schemaPath = resolve("schemas/tuvan/v1.0.0/config.schema.json");
 
   logger.debug("Loading configuration", {
     defaultsPath,
+    schemaPath,
     envPrefix: identity.app.env_prefix,
   });
 
   try {
-    // Layer 1: Load defaults from YAML
-    const yamlContent = readFileSync(defaultsPath, "utf-8");
-    const config = parseYaml(yamlContent) as TuvanConfig;
-
-    // TODO: Add schema validation when tsfulmen/config provides it
-    // TODO: Add Layer 2 (user config) when tsfulmen/config supports it
-    // TODO: Add Layer 3 (env vars) when tsfulmen/config supports it
+    // Load via tsfulmen (handles layers 1, 2, 3 and validation)
+    const result = await tsfulmenLoadConfig<TuvanConfig>({
+      identity: {
+        vendor: identity.app.vendor,
+        app: identity.app.binary_name,
+      },
+      defaultsPath,
+      schemaPath,
+      envPrefix: identity.app.env_prefix.endsWith("_")
+        ? identity.app.env_prefix.slice(0, -1)
+        : identity.app.env_prefix,
+    });
 
     // Build metadata for introspection
     const metadata: ConfigMetadata = {
-      defaultsPath,
-      userConfigPath: null, // Layer 2 not implemented yet
-      envPrefix: identity.app.env_prefix,
+      defaultsPath: result.metadata.defaultsPath,
+      userConfigPath: result.metadata.userConfigPath,
+      envPrefix: result.metadata.envPrefix,
       identity: {
         vendor: identity.app.vendor,
         binaryName: identity.app.binary_name,
       },
-      activeLayers: ["defaults"], // Only Layer 1 active for now
+      activeLayers: result.metadata.activeLayers as ("defaults" | "user" | "env" | "cli")[],
     };
 
     // Cache config WITH metadata
-    cachedConfigWithMetadata = { config, metadata };
+    cachedConfigWithMetadata = { config: result.config, metadata };
 
     logger.info("Configuration loaded successfully", {
-      server: `${config.server.host}:${config.server.port}`,
-      loggingProfile: config.logging.profile,
-      metricsEnabled: config.metrics.enabled,
+      server: `${result.config.server.host}:${result.config.server.port}`,
+      loggingProfile: result.config.logging.profile,
+      metricsEnabled: result.config.metrics.enabled,
+      activeLayers: metadata.activeLayers,
     });
 
-    return config;
-  } catch (error) {
+    return result.config;
+  } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error("Configuration load failed", err);
+
+    // Map tsfulmen errors to our ConfigInvalidError
+    // If it's a schema validation error, tsfulmen might provide details we could extract
+    // For now, we pass the message through
     throw new ConfigInvalidError("Failed to load configuration", {
       field: "config",
-      expected: "valid YAML",
+      expected: "valid configuration matching schema",
       actual: err.message,
     });
   }
