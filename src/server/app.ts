@@ -7,13 +7,18 @@
  * - Request ID correlation
  * - Structured logging (tsfulmen/logging with security middleware)
  * - Standard endpoints (health, version, metrics)
+ * - OpenAPI specification generation (@fastify/swagger)
  */
 
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import swagger from "@fastify/swagger";
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
+import { applyFulmenAjvFormats } from "@fulmenhq/tsfulmen/schema";
+import type { default as Ajv } from "ajv";
 import type { FastifyInstance, FastifyServerOptions } from "fastify";
 import Fastify from "fastify";
+import type { DataPlaneAuthConfig } from "../config/types.js";
 import { getVersion } from "../core/version.js";
 import {
   getLogger,
@@ -22,6 +27,9 @@ import {
   LoggingProfile,
 } from "../observability/logger.js";
 import { initializeMetrics } from "../observability/metrics.js";
+import { createPlaneAuthHook } from "./auth/plane-auth.js";
+import { registerDataPlaneAuth } from "./auth/register.js";
+import { ServiceInfoSchema } from "./schemas/index.js";
 
 /**
  * Server configuration options
@@ -35,6 +43,9 @@ export interface ServerConfig {
   logging?: boolean;
   /** Log level (default: info) */
   logLevel?: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
+
+  /** Data plane auth configuration (optional) */
+  dataPlaneAuth?: DataPlaneAuthConfig;
 }
 
 /**
@@ -56,6 +67,7 @@ export async function createServer(
   config: ServerConfig,
 ): Promise<FastifyInstance> {
   const binaryName = identity.app.binary_name;
+  const version = getVersion();
 
   // Initialize tsfulmen logger if not already initialized
   // Use STRUCTURED profile for server (v0.1.11+: now supports middleware)
@@ -68,6 +80,12 @@ export async function createServer(
   }
 
   const logger = getLogger();
+
+  // Fastify's AJV plugin type intentionally accepts `unknown` options;
+  // tsfulmen's helper uses a narrower options type.
+  // Wrap it to keep typecheck/build stable across Fastify upgrades.
+  const applyAjvFormats = (ajv: Ajv, options?: unknown): Ajv =>
+    applyFulmenAjvFormats(ajv, options as never);
 
   // Configure Fastify with simplified Pino for HTTP request logging
   const fastifyOptions: FastifyServerOptions = {
@@ -94,9 +112,55 @@ export async function createServer(
     genReqId: () => crypto.randomUUID(),
     // We'll use custom logging hooks with tsfulmen logger
     disableRequestLogging: true,
+    ajv: {
+      plugins: [applyAjvFormats],
+    },
   };
 
   const server: FastifyInstance = Fastify(fastifyOptions);
+
+  // Optional data plane auth enforcement
+  if (config.dataPlaneAuth) {
+    await registerDataPlaneAuth({
+      server,
+      identity,
+      config: config.dataPlaneAuth,
+      authHook: createPlaneAuthHook(config.dataPlaneAuth.auth),
+    });
+  }
+
+  // Register OpenAPI/Swagger documentation generator
+  // Schemas defined on routes are automatically included in the spec
+  await server.register(swagger, {
+    openapi: {
+      openapi: "3.1.0",
+      info: {
+        title: `${binaryName} API`,
+        description: identity.app.description,
+        version: version,
+        contact: {
+          name: identity.app.vendor,
+          url: `https://github.com/${identity.app.vendor}/${binaryName}`,
+        },
+        license: {
+          name: "MIT",
+          url: "https://opensource.org/licenses/MIT",
+        },
+      },
+      servers: [
+        {
+          url: `http://${config.host}:${config.port}`,
+          description: "Local development server",
+        },
+      ],
+      tags: [
+        {
+          name: "infrastructure",
+          description: "Health, version, metrics, and OpenAPI endpoints",
+        },
+      ],
+    },
+  });
 
   // Register security headers (Helmet)
   await server.register(helmet, {
@@ -149,7 +213,7 @@ export async function createServer(
     const duration = Date.now() - (request.requestTime || Date.now());
     const logLevel = reply.statusCode >= 500 ? "error" : reply.statusCode >= 400 ? "warn" : "info";
 
-    const logMessage = `Request completed`;
+    const logMessage = "Request completed";
     const logContext = {
       method: request.method,
       url: request.url,
@@ -176,21 +240,70 @@ export async function createServer(
   await registerVersionRoute(server, identity);
   await registerMetricsRoute(server, identity);
 
-  // Root endpoint
-  server.get("/", async (_request, _reply) => {
-    return {
-      service: binaryName,
-      description: identity.app.description,
-      version: getVersion(),
-      endpoints: {
-        health: "/health",
-        version: "/version",
-        metrics: "/metrics",
+  // Root endpoint - service information
+  server.get(
+    "/",
+    {
+      schema: {
+        summary: "Service information",
+        description: "Returns basic service information and available endpoints.",
+        tags: ["infrastructure"],
+        response: {
+          200: ServiceInfoSchema,
+        },
       },
-    };
-  });
+    },
+    async (_request, _reply) => {
+      return {
+        service: binaryName,
+        description: identity.app.description,
+        version: version,
+        endpoints: {
+          health: "/health",
+          version: "/version",
+          metrics: "/metrics",
+        },
+      };
+    },
+  );
+
+  // OpenAPI specification endpoint (Workhorse Standard requirement)
+  server.get(
+    "/openapi.yaml",
+    {
+      schema: {
+        summary: "OpenAPI specification",
+        description: "Returns the OpenAPI 3.1 specification for this API in YAML format.",
+        tags: ["infrastructure"],
+        produces: ["application/yaml"],
+      },
+    },
+    async (_request, reply) => {
+      const yaml = server.swagger({ yaml: true });
+      return reply.type("application/yaml").send(yaml);
+    },
+  );
+
+  // OpenAPI specification in JSON format
+  server.get(
+    "/openapi.json",
+    {
+      schema: {
+        summary: "OpenAPI specification (JSON)",
+        description: "Returns the OpenAPI 3.1 specification for this API in JSON format.",
+        tags: ["infrastructure"],
+        produces: ["application/json"],
+      },
+    },
+    async (_request, reply) => {
+      const json = server.swagger();
+      return reply.type("application/json").send(json);
+    },
+  );
 
   // 404 handler
+  // Note: setNotFoundHandler doesn't support schema option, so 404 responses
+  // are not included in OpenAPI spec (which is standard behavior)
   server.setNotFoundHandler(async (request, reply) => {
     reply.code(404).send({
       error: {

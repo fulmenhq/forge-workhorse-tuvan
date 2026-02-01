@@ -5,13 +5,13 @@
  *
  * Production-ready TypeScript workhorse application template.
  * Provides CLI interface with Commander.js and integrates App Identity Module.
+ *
+ * CRITICAL: Initializes embedded identity FIRST to ensure the binary works
+ * correctly when run outside the repository directory. This solves the
+ * "directory walking" anti-pattern.
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { loadIdentity } from "@fulmenhq/tsfulmen/appidentity";
-
 import { exitCodes } from "@fulmenhq/tsfulmen/foundry";
 import { Command } from "commander";
 import { createDoctorCommand } from "./cli/commands/doctor.js";
@@ -19,23 +19,24 @@ import { createEnvinfoCommand } from "./cli/commands/envinfo.js";
 import { createHealthCommand } from "./cli/commands/health.js";
 import { createServeCommand } from "./cli/commands/serve.js";
 import { createVersionCommand } from "./cli/commands/version.js";
-
-// Get __dirname equivalent in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Import embedded identity initialization (MUST be first)
+import { initializeEmbeddedIdentity } from "./core/embedded-identity.js";
+import { getVersion } from "./core/version.js";
 
 /**
  * Main CLI entry point
  */
 async function main(): Promise<void> {
   try {
-    // Load app identity early
+    // Initialize embedded identity FIRST (enables binary to work outside repo)
+    await initializeEmbeddedIdentity();
+
+    // Load app identity (will use embedded fallback if filesystem discovery fails)
     const identity = await loadIdentity();
     const binaryName = identity.app.binary_name;
 
-    // Read version from VERSION file
-    const versionPath = join(__dirname, "..", "VERSION");
-    const version = readFileSync(versionPath, "utf-8").trim();
+    // Get version from embedded identity
+    const version = getVersion();
 
     // Create CLI program
     const program = new Command();

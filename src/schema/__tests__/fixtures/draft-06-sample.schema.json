@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "title": "draft-06 sample",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

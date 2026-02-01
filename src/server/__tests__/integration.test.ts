@@ -9,11 +9,11 @@ describe("Server Integration", () => {
   beforeAll(async () => {
     const config = await loadConfig();
     const identity = await loadIdentity();
-    app = await createServer(identity, config.server);
-  });
+    app = await createServer(identity, { ...config.server, dataPlaneAuth: config.dataPlaneAuth });
+  }, 20000);
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it("GET / should return service discovery info", async () => {

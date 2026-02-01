@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import { exitCodes } from "@fulmenhq/tsfulmen/foundry";
 import { Command } from "commander";
+import { analyzeEnvVar, type EnvVarDescriptor } from "../utils/envvars.js";
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +25,72 @@ interface DiagnosticResult {
   status: "ok" | "warning" | "error";
   message: string;
   suggestion?: string;
+}
+
+function checkEnvVarConflicts(identity: Identity): DiagnosticResult {
+  const prefix = identity.app.env_prefix.endsWith("_")
+    ? identity.app.env_prefix
+    : `${identity.app.env_prefix}_`;
+
+  const descriptors: EnvVarDescriptor[] = [
+    {
+      id: "server.host",
+      description: "server.host",
+      canonicalKey: `${prefix}SERVER_HOST`,
+      aliasKey: `${prefix}HOST`,
+    },
+    {
+      id: "server.port",
+      description: "server.port",
+      canonicalKey: `${prefix}SERVER_PORT`,
+      aliasKey: `${prefix}PORT`,
+    },
+    {
+      id: "logging.level",
+      description: "logging.level",
+      canonicalKey: `${prefix}LOGGING_LEVEL`,
+      aliasKey: `${prefix}LOG_LEVEL`,
+    },
+    {
+      id: "logging.profile",
+      description: "logging.profile",
+      canonicalKey: `${prefix}LOGGING_PROFILE`,
+      aliasKey: `${prefix}LOG_PROFILE`,
+    },
+    {
+      id: "dataPlaneAuth.enabled",
+      description: "dataPlaneAuth.enabled",
+      canonicalKey: `${prefix}DATA_PLANE_AUTH_ENABLED`,
+      aliasKey: `${prefix}AUTH_ENABLED`,
+    },
+    {
+      id: "dataPlaneAuth.mode",
+      description: "dataPlaneAuth.auth.mode",
+      canonicalKey: `${prefix}DATA_PLANE_AUTH_AUTH_MODE`,
+      aliasKey: `${prefix}AUTH_MODE`,
+    },
+  ];
+
+  const conflicts = descriptors
+    .map((d) => analyzeEnvVar(d))
+    .filter((s) => s.conflict)
+    .map((s) => s.id);
+
+  if (conflicts.length === 0) {
+    return {
+      name: "Env Var Conflicts",
+      status: "ok",
+      message: "No alias vs canonical env var conflicts detected",
+    };
+  }
+
+  return {
+    name: "Env Var Conflicts",
+    status: "warning",
+    message: `Conflicting env vars detected for: ${conflicts.join(", ")}`,
+    suggestion:
+      "Unset either the alias (e.g. TUVAN_PORT) or the canonical nested key (e.g. TUVAN_SERVER_PORT) so behavior is unambiguous",
+  };
 }
 
 /**
@@ -177,19 +244,48 @@ function checkMakefile(): DiagnosticResult {
   };
 }
 
+async function checkConfigLoad(): Promise<DiagnosticResult> {
+  try {
+    const { loadConfig } = await import("../../config/loader.js");
+    const config = await loadConfig();
+
+    const dataPlane = `${config.server.host}:${config.server.port}`;
+    const controlPlane = config.controlPlane.enabled
+      ? `${config.controlPlane.host}:${config.controlPlane.port}${config.controlPlane.basePath}`
+      : "disabled";
+
+    return {
+      name: "Configuration Load",
+      status: "ok",
+      message: `Config loaded successfully (data=${dataPlane}, control=${controlPlane})`,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      name: "Configuration Load",
+      status: "error",
+      message: `Failed to load config: ${message}`,
+      suggestion:
+        "Run `tuvan envinfo` to inspect env vars and resolve config validation errors (or unset conflicting alias/canonical env vars)",
+    };
+  }
+}
+
 /**
  * Run all diagnostic checks
  *
  * @param identity - App identity from .fulmen/app.yaml
  * @returns Array of diagnostic results
  */
-function runDiagnostics(identity: Identity): DiagnosticResult[] {
+async function runDiagnostics(identity: Identity): Promise<DiagnosticResult[]> {
   return [
     checkNodeVersion(),
     checkAppIdentityFile(identity),
     checkVersionFile(),
     checkTsfulmenInstallation(),
     checkMakefile(),
+    checkEnvVarConflicts(identity),
+    await checkConfigLoad(),
   ];
 }
 
@@ -265,9 +361,25 @@ export function createDoctorCommand(identity: Identity): Command {
 
   command
     .description("Run comprehensive diagnostic checks and suggest fixes for issues")
-    .action(() => {
-      const results = runDiagnostics(identity);
-      console.log(formatDiagnosticResults(results));
+    .option("--json", "Output in JSON format")
+    .action(async () => {
+      const opts = command.opts<{ json?: boolean }>();
+      const results = await runDiagnostics(identity);
+
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              results,
+              ok: results.every((r) => r.status !== "error"),
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        console.log(formatDiagnosticResults(results));
+      }
 
       const hasErrors = results.some((r) => r.status === "error");
       process.exit(hasErrors ? exitCodes.EXIT_FAILURE : exitCodes.EXIT_SUCCESS);

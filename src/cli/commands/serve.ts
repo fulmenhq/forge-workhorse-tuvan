@@ -15,6 +15,9 @@ import type { FastifyInstance } from "fastify";
 interface ServeOptions {
   port?: string;
   host?: string;
+  controlHost?: string;
+  controlPort?: string;
+  adminBasePath?: string;
 }
 
 /**
@@ -45,8 +48,26 @@ export function createServeCommand(identity: Identity): Command {
 
   command
     .description("Start the HTTP server")
-    .option("-p, --port <port>", `Port to listen on (env: ${envPrefix}PORT, default: 8080)`)
-    .option("-H, --host <host>", `Host to bind to (env: ${envPrefix}HOST, default: localhost)`)
+    .option(
+      "-p, --port <port>",
+      `Port to listen on (env: ${envPrefix}PORT or ${envPrefix}SERVER_PORT, default: 8080)`,
+    )
+    .option(
+      "-H, --host <host>",
+      `Host to bind to (env: ${envPrefix}HOST or ${envPrefix}SERVER_HOST, default: localhost)`,
+    )
+    .option(
+      "--control-host <host>",
+      `Control plane host (env: ${envPrefix}CONTROL_PLANE_HOST, default: 127.0.0.1)`,
+    )
+    .option(
+      "--control-port <port>",
+      `Control plane port (env: ${envPrefix}CONTROL_PLANE_PORT, default: 8081)`,
+    )
+    .option(
+      "--admin-base-path <path>",
+      `Control plane base path (env: ${envPrefix}ADMIN_BASE_PATH, default: /control)`,
+    )
     .action(async (options: ServeOptions) => {
       try {
         // Load config from three layers (defaults → user → env)
@@ -57,27 +78,50 @@ export function createServeCommand(identity: Identity): Command {
         const config = applyCliOverrides(baseConfig, options);
 
         console.log(`[${binaryName}] Starting HTTP server...`);
-        console.log(`[${binaryName}] Host: ${config.server.host}`);
-        console.log(`[${binaryName}] Port: ${config.server.port}`);
+        console.log(
+          `[${binaryName}] Data plane: http://${config.server.host}:${config.server.port}`,
+        );
+        console.log(
+          `[${binaryName}] Data plane auth: ${config.dataPlaneAuth.enabled ? "enabled" : "disabled"} (${config.dataPlaneAuth.auth.mode})`,
+        );
+        if (config.controlPlane.enabled) {
+          console.log(
+            `[${binaryName}] Control plane: http://${config.controlPlane.host}:${config.controlPlane.port}${config.controlPlane.basePath}`,
+          );
+          console.log(
+            `[${binaryName}] Control auth: ${config.controlPlane.auth.mode} (loopback-unauth=${config.controlPlane.auth.allowUnauthenticatedLoopback ? "on" : "off"})`,
+          );
+        }
         console.log(`[${binaryName}] Logging: ${config.logging.profile} (${config.logging.level})`);
         console.log("");
 
-        // Import server factory
+        // Import server factories
         const { createServer, stopServer } = await import("../../server/app.js");
+        const { createControlPlaneServer } = await import("../../server/control-plane.js");
 
-        // Create server
+        // Create data plane server
         const server: FastifyInstance = await createServer(identity, {
           host: config.server.host,
           port: config.server.port,
           logging: true,
           logLevel: config.logging.level,
+          dataPlaneAuth: config.dataPlaneAuth,
         });
 
-        // Create signal manager for graceful shutdown
+        // Create signal manager for graceful shutdown / reload
         const signalManager = createSignalManager({
-          doubleTapWindowMs: 2000, // 2 second window for Ctrl+C double-tap
-          doubleTapExitCode: 130, // Standard SIGINT exit code
+          doubleTapWindowMs: 2000,
+          doubleTapExitCode: 130,
         });
+
+        // Optional: create control plane server
+        const controlServer: FastifyInstance | null = config.controlPlane.enabled
+          ? await createControlPlaneServer({
+              identity,
+              controlPlane: config.controlPlane,
+              signalManager,
+            })
+          : null;
 
         // Register shutdown handler (handles SIGTERM and SIGINT with double-tap)
         await onShutdown(signalManager, async (signal: NodeJS.Signals) => {
@@ -85,6 +129,9 @@ export function createServeCommand(identity: Identity): Command {
 
           try {
             // LIFO cleanup sequence
+            if (controlServer) {
+              await stopServer(controlServer);
+            }
             await stopServer(server);
             console.log(`[${binaryName}] Server stopped cleanly`);
             process.exit(0);
@@ -107,13 +154,10 @@ export function createServeCommand(identity: Identity): Command {
 
             // Log what changes require restart vs. can be applied hot
             console.log(
-              `[${binaryName}] ⚠️  Changes requiring restart: server.host, server.port, logging.profile`,
+              `[${binaryName}] NOTE: Restart required for server.host/server.port/logging.profile changes`,
             );
             console.log(
-              `[${binaryName}] ℹ️  Changes applied on next request: logging.level, metrics.*`,
-            );
-            console.log(
-              `[${binaryName}] 💡 Tip: Restart server for host/port/profile changes to take effect`,
+              `[${binaryName}] NOTE: Next-request changes include logging.level and metrics.*`,
             );
 
             // Future work (out of scope for Priority 5):
@@ -129,21 +173,42 @@ export function createServeCommand(identity: Identity): Command {
         // Start server
         await server.listen({ host: config.server.host, port: config.server.port });
 
+        if (controlServer) {
+          await controlServer.listen({
+            host: config.controlPlane.host,
+            port: config.controlPlane.port,
+          });
+        }
+
         console.log(
           `[${binaryName}] Server listening on http://${config.server.host}:${config.server.port}`,
         );
         console.log("");
-        console.log("Available endpoints:");
-        console.log(`  Root:          http://${config.server.host}:${config.server.port}/`);
-        console.log(`  Health:        http://${config.server.host}:${config.server.port}/health`);
-        console.log(
-          `  Health (live): http://${config.server.host}:${config.server.port}/health/live`,
-        );
-        console.log(
-          `  Health (ready):http://${config.server.host}:${config.server.port}/health/ready`,
-        );
-        console.log(`  Version:       http://${config.server.host}:${config.server.port}/version`);
-        console.log(`  Metrics:       http://${config.server.host}:${config.server.port}/metrics`);
+        console.log("Data plane endpoints:");
+        console.log(`  Root:    http://${config.server.host}:${config.server.port}/`);
+        console.log(`  Health:  http://${config.server.host}:${config.server.port}/health`);
+        console.log(`  Live:    http://${config.server.host}:${config.server.port}/health/live`);
+        console.log(`  Ready:   http://${config.server.host}:${config.server.port}/health/ready`);
+        console.log(`  Version: http://${config.server.host}:${config.server.port}/version`);
+        console.log(`  Metrics: http://${config.server.host}:${config.server.port}/metrics`);
+        console.log(`  OpenAPI: http://${config.server.host}:${config.server.port}/openapi.yaml`);
+
+        if (controlServer) {
+          console.log("");
+          console.log("Control plane endpoints:");
+          console.log(
+            `  Discovery: http://${config.controlPlane.host}:${config.controlPlane.port}${config.controlPlane.basePath}/`,
+          );
+          console.log(
+            `  Signal:    http://${config.controlPlane.host}:${config.controlPlane.port}${config.controlPlane.basePath}/signal`,
+          );
+          console.log(
+            `  Reload:    http://${config.controlPlane.host}:${config.controlPlane.port}${config.controlPlane.basePath}/config/reload`,
+          );
+          console.log(
+            `  OpenAPI:   http://${config.controlPlane.host}:${config.controlPlane.port}/openapi.yaml`,
+          );
+        }
         console.log("");
         console.log("Press Ctrl+C to stop (Ctrl+C twice for force quit)");
       } catch (error) {

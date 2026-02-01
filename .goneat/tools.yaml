@@ -1,0 +1,159 @@
+# goneat Tools Configuration (v1.0.0)
+# Repository: forge-workhorse-tuvan
+#
+# This file is the SINGLE SOURCE OF TRUTH for tools configuration.
+# There are NO hidden defaults or runtime merging.
+#
+# Edit this file to:
+# - Add/remove tools
+# - Change tool detection commands
+# - Modify installer priorities
+# - Define custom scopes
+#
+# Validate changes with: goneat doctor tools validate
+# See schema: schemas/tools/tools.v1.0.0.json
+scopes:
+  foundation:
+    description: Core foundation tools required for goneat and TypeScript development
+    tools:
+      - actionlint
+      - ripgrep
+      - jq
+      - yq
+      - bun
+      - yamlfmt
+tools:
+  actionlint:
+    name: actionlint
+    description: GitHub Actions workflow linter
+    kind: system
+    detect_command: actionlint -version
+    platforms:
+      - darwin
+      - linux
+      - windows
+    version_args:
+      - -version
+    check_args:
+      - -help
+    installer_priority:
+      darwin:
+        - brew
+        - bun
+      linux:
+        - brew
+        - bun
+      windows:
+        - scoop
+        - winget
+  jq:
+    name: jq
+    description: JSON processor - used in CI/CD scripts
+    kind: system
+    detect_command: jq --version
+    platforms:
+      - darwin
+      - linux
+      - windows
+    installer_priority:
+      darwin:
+        - brew
+        - bun
+        - mise
+      linux:
+        - brew
+        - bun
+        - mise
+      windows:
+        - bun
+        - scoop
+        - winget
+  ripgrep:
+    name: ripgrep
+    description: Fast text search - used by goneat for license auditing
+    kind: system
+    detect_command: rg --version
+    platforms:
+      - darwin
+      - linux
+      - windows
+    installer_priority:
+      darwin:
+        - brew
+        - bun
+        - mise
+      linux:
+        - brew
+        - bun
+        - mise
+      windows:
+        - bun
+        - scoop
+        - winget
+  bun:
+    name: bun
+    description: Fast JavaScript runtime and package manager - required for Tuvan development
+    kind: system
+    detect_command: bun --version
+    platforms:
+      - darwin
+      - linux
+      - windows
+    version_args:
+      - --version
+    installer_priority:
+      darwin:
+        - brew
+        - mise
+      linux:
+        - brew
+        - mise
+      windows:
+        - scoop
+        - winget
+    version_scheme: semver
+    minimum_version: 1.0.0
+  yamlfmt:
+    name: yamlfmt
+    description: YAML formatter and linter
+    kind: system
+    detect_command: yamlfmt --version
+    platforms:
+      - darwin
+      - linux
+      - windows
+    version_args:
+      - --version
+    check_args:
+      - --help
+    installer_priority:
+      darwin:
+        - brew
+        - bun
+      linux:
+        - brew
+        - bun
+      windows:
+        - scoop
+  yq:
+    name: yq
+    description: YAML processor
+    kind: system
+    detect_command: yq --version
+    platforms:
+      - darwin
+      - linux
+      - windows
+    installer_priority:
+      darwin:
+        - brew
+        - bun
+        - mise
+      linux:
+        - brew
+        - bun
+        - mise
+      windows:
+        - bun
+        - scoop
+        - winget

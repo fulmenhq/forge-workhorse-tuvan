@@ -10,11 +10,11 @@ describe("Version Endpoint", () => {
   beforeAll(async () => {
     const config = await loadConfig();
     const identity = await loadIdentity();
-    app = await createServer(identity, config.server);
-  });
+    app = await createServer(identity, { ...config.server, dataPlaneAuth: config.dataPlaneAuth });
+  }, 20000);
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it("GET /version should return 200 OK and version info", async () => {
@@ -26,17 +26,33 @@ describe("Version Endpoint", () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
 
-    // Identity checks
+    // Identity checks (REQUIRED)
     expect(body.identity).toBeDefined();
     expect(body.identity.binary_name).toBe("tuvan");
     expect(body.identity.vendor).toBe("fulmen");
 
-    // Version check
+    // Version check (REQUIRED)
     expect(body.version).toBe(getVersion());
 
-    // Structure checks
-    expect(body.git_commit).toBeDefined();
-    expect(body.build_date).toBeDefined();
+    // Runtime checks (REQUIRED)
     expect(body.runtime).toBeDefined();
+    expect(body.runtime.name).toMatch(/^(node|bun)$/);
+    expect(body.runtime.version).toBeDefined();
+    expect(body.runtime.platform).toBeDefined();
+    expect(body.runtime.arch).toBeDefined();
+
+    // Dependencies checks (REQUIRED by Workhorse Standard)
+    expect(body.dependencies).toBeDefined();
+    expect(body.dependencies.tsfulmen).toBeDefined();
+    expect(body.dependencies.crucible).toBeDefined(); // REQUIRED by Workhorse Standard
+
+    // git_commit and build_date are OPTIONAL (only set at build time)
+    // In dev mode these may be undefined, which is acceptable
+    if (body.git_commit !== undefined) {
+      expect(typeof body.git_commit).toBe("string");
+    }
+    if (body.build_date !== undefined) {
+      expect(typeof body.build_date).toBe("string");
+    }
   });
 });

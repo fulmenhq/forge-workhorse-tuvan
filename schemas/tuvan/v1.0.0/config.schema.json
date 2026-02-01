@@ -4,17 +4,31 @@
   "title": "Tuvan Workhorse Configuration",
   "description": "Configuration schema for Tuvan TypeScript workhorse template (SemVer: 0.1.0)",
   "type": "object",
-  "required": ["server", "logging"],
+  "required": [
+    "server",
+    "dataPlaneAuth",
+    "controlPlane",
+    "logging",
+    "metrics",
+    "telemetry"
+  ],
   "properties": {
     "server": {
       "type": "object",
-      "required": ["host", "port"],
+      "required": [
+        "host",
+        "port"
+      ],
       "properties": {
         "host": {
           "type": "string",
           "description": "Host to bind HTTP server to",
           "default": "localhost",
-          "examples": ["localhost", "0.0.0.0", "127.0.0.1"]
+          "examples": [
+            "localhost",
+            "0.0.0.0",
+            "127.0.0.1"
+          ]
         },
         "port": {
           "type": "integer",
@@ -26,9 +40,131 @@
       },
       "additionalProperties": false
     },
+    "dataPlaneAuth": {
+      "type": "object",
+      "description": "Data plane authentication configuration and route policy",
+      "required": [
+        "enabled",
+        "auth",
+        "policy"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable data plane auth enforcement",
+          "default": false
+        },
+        "auth": {
+          "$ref": "#/$defs/planeAuth"
+        },
+        "policy": {
+          "type": "object",
+          "description": "Route policy for auth enforcement",
+          "required": [
+            "denyPrefixes",
+            "publicPrefixes",
+            "conditionalPrefixes",
+            "protectedPrefixes"
+          ],
+          "properties": {
+            "denyPrefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "publicPrefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "/",
+                "/health",
+                "/version",
+                "/openapi.yaml",
+                "/openapi.json"
+              ]
+            },
+            "conditionalPrefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "protectedPrefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "/metrics"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "controlPlane": {
+      "type": "object",
+      "description": "Control plane server configuration (admin endpoints)",
+      "required": [
+        "enabled",
+        "host",
+        "port",
+        "basePath",
+        "auth"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable control plane HTTP server",
+          "default": true
+        },
+        "host": {
+          "type": "string",
+          "description": "Host to bind control plane server to (recommended: 127.0.0.1)",
+          "default": "127.0.0.1",
+          "examples": [
+            "127.0.0.1",
+            "localhost",
+            "0.0.0.0"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port number for control plane server",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8081
+        },
+        "basePath": {
+          "type": "string",
+          "description": "Base path prefix for control endpoints",
+          "pattern": "^/([A-Za-z0-9._-]+(/)?)*$",
+          "default": "/control",
+          "examples": [
+            "/control",
+            "/admin",
+            "/internal/control"
+          ]
+        },
+        "auth": {
+          "$ref": "#/$defs/planeAuth"
+        }
+      },
+      "additionalProperties": false
+    },
     "logging": {
       "type": "object",
-      "required": ["profile", "level"],
+      "required": [
+        "profile",
+        "level"
+      ],
       "properties": {
         "profile": {
           "$ref": "#/$defs/loggingProfile"
@@ -41,7 +177,9 @@
     },
     "metrics": {
       "type": "object",
-      "required": ["enabled"],
+      "required": [
+        "enabled"
+      ],
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -74,16 +212,75 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "planeAuth": {
+      "type": "object",
+      "description": "Plane authentication configuration",
+      "required": [
+        "mode",
+        "allowUnauthenticatedLoopback",
+        "rateLimitPerMinute"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "bearerToken",
+            "basicAuth"
+          ],
+          "default": "disabled"
+        },
+        "bearerToken": {
+          "type": "string",
+          "description": "Bearer token for Authorization header",
+          "default": ""
+        },
+        "basicUser": {
+          "type": "string",
+          "description": "Basic auth username",
+          "default": ""
+        },
+        "basicPassword": {
+          "type": "string",
+          "description": "Basic auth password",
+          "default": ""
+        },
+        "allowUnauthenticatedLoopback": {
+          "type": "boolean",
+          "description": "Allow unauthenticated requests from loopback",
+          "default": true
+        },
+        "rateLimitPerMinute": {
+          "type": "integer",
+          "description": "In-memory per-identity rate limit (0 disables)",
+          "minimum": 0,
+          "maximum": 600,
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "loggingProfile": {
       "type": "string",
       "description": "Logging profile from tsfulmen (aligned with Crucible logging standard)",
-      "enum": ["simple", "structured", "enterprise"],
+      "enum": [
+        "simple",
+        "structured",
+        "enterprise"
+      ],
       "default": "structured"
     },
     "logLevel": {
       "type": "string",
       "description": "Minimum log level (aligned with Crucible logging standard)",
-      "enum": ["trace", "debug", "info", "warn", "error", "fatal"],
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "fatal"
+      ],
       "default": "info"
     }
   }

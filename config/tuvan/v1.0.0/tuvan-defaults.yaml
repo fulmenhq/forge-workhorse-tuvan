@@ -18,35 +18,92 @@
 # SemVer: This config is tied to tuvan@0.1.0. Major version bumps may
 #         introduce breaking config changes; minor/patch versions maintain
 #         backward compatibility.
-
 # HTTP Server Configuration
 server:
   # Host to bind to (default: localhost for security)
   # Production: Set to "0.0.0.0" to accept external connections
   host: localhost
-
   # Port to listen on
   port: 8080
-
+# Data Plane Authentication (optional)
+#
+# The data plane is the primary HTTP API surface. Authentication is disabled
+# by default to keep the template approachable, but the wiring is present so
+# CDRL users can enable a starter auth mode quickly.
+dataPlaneAuth:
+  enabled: false
+  # Auth implementation
+  auth:
+    # Modes: disabled | bearerToken | basicAuth
+    mode: disabled
+    # Bearer token (Authorization: Bearer <token>)
+    bearerToken: ""
+    # Basic auth (Authorization: Basic base64(user:pass))
+    basicUser: ""
+    basicPassword: ""
+    # Allow unauthenticated loopback requests (dev convenience)
+    allowUnauthenticatedLoopback: true
+    # In-memory rate limit (0 disables)
+    rateLimitPerMinute: 0
+  # Route policy: categorize endpoints into denied/public/conditional/protected
+  policy:
+    # Deny access entirely (treated as 404)
+    denyPrefixes: []
+    # Always allowed without auth
+    publicPrefixes:
+      - /
+      - /health
+      - /version
+      - /openapi.yaml
+      - /openapi.json
+    # Allowed without auth, but handlers may optionally return more detail if authed
+    conditionalPrefixes: []
+    # Requires auth
+    protectedPrefixes:
+      - /metrics
+# Control Plane Configuration
+#
+# The control plane is intended for operational endpoints (e.g. /control/signal)
+# and is safe-by-default:
+# - Binds to loopback by default (minimizes exposure)
+# - Supports a simple bearer token starter auth
+controlPlane:
+  enabled: true
+  # Bind to loopback by default so control endpoints are not exposed publicly.
+  host: 127.0.0.1
+  # Dedicated port for control plane HTTP server
+  port: 8081
+  # Base path prefix for control plane endpoints
+  basePath: /control
+  # Authentication settings for control endpoints
+  auth:
+    # Modes: disabled | bearerToken
+    #
+    # bearerToken mode reads token from config/env and expects:
+    #   Authorization: Bearer <token>
+    mode: bearerToken
+    # Prefer setting token via env var (e.g. TUVAN_ADMIN_TOKEN)
+    bearerToken: ""
+    # Allow unauthenticated loopback requests when token is not configured.
+    # This provides a low-friction local dev experience.
+    allowUnauthenticatedLoopback: true
+    # Simple in-memory rate limiter for control endpoints (0 disables)
+    rateLimitPerMinute: 10
 # Logging Configuration
 logging:
   # Profile: simple (CLI), structured (server), enterprise (full envelope)
   # See: https://github.com/fulmenhq/tsfulmen/tree/main/src/logging
   profile: structured
-
   # Minimum log level: trace, debug, info, warn, error, fatal
   level: info
-
 # Metrics Configuration
 metrics:
   # Enable Prometheus metrics collection
   enabled: true
-
   # Metrics endpoint port
   # - 0: Share server port (metrics at http://host:port/metrics)
   # - 1-65535: Dedicated port (isolated metrics endpoint)
   port: 0
-
 # Telemetry Configuration
 telemetry:
   # Telemetry namespace (automatically set from app identity)

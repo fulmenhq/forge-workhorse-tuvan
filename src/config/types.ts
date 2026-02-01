@@ -15,6 +15,80 @@ export interface ServerConfig {
 }
 
 /**
+ * Plane auth configuration
+ */
+export interface PlaneAuthConfig {
+  /** Authentication mode */
+  mode: "disabled" | "bearerToken" | "basicAuth";
+
+  /**
+   * Bearer token used for Authorization: Bearer <token>
+   *
+   * Recommended: set via environment variable (e.g. TUVAN_ADMIN_TOKEN)
+   * rather than committing into config files.
+   */
+  bearerToken?: string;
+
+  /** Basic auth username */
+  basicUser?: string;
+
+  /** Basic auth password */
+  basicPassword?: string;
+
+  /**
+   * Allow unauthenticated access when the request originates from loopback.
+   *
+   * This provides a low-friction local-dev default while keeping remote exposure
+   * blocked by binding to loopback host by default.
+   */
+  allowUnauthenticatedLoopback: boolean;
+
+  /** Optional in-memory rate limit for auth failures (0 disables) */
+  rateLimitPerMinute: number;
+}
+
+/**
+ * Data plane auth policy
+ *
+ * Policies are evaluated in order:
+ * 1) denyPrefixes
+ * 2) publicPrefixes
+ * 3) conditionalPrefixes
+ * 4) protectedPrefixes
+ */
+export interface DataPlaneAuthPolicy {
+  denyPrefixes: string[];
+  publicPrefixes: string[];
+  conditionalPrefixes: string[];
+  protectedPrefixes: string[];
+}
+
+/**
+ * Data plane auth configuration
+ */
+export interface DataPlaneAuthConfig {
+  enabled: boolean;
+  auth: PlaneAuthConfig;
+  policy: DataPlaneAuthPolicy;
+}
+
+/**
+ * Control plane configuration
+ */
+export interface ControlPlaneConfig {
+  /** Enable control plane HTTP server */
+  enabled: boolean;
+  /** Bind address (recommended: 127.0.0.1) */
+  host: string;
+  /** Port for control plane server */
+  port: number;
+  /** Base path prefix for control endpoints (default: /control) */
+  basePath: string;
+  /** Control plane auth */
+  auth: PlaneAuthConfig;
+}
+
+/**
  * Logging configuration
  */
 export interface LoggingConfig {
@@ -47,6 +121,8 @@ export interface TelemetryConfig {
  */
 export interface TuvanConfig {
   server: ServerConfig;
+  dataPlaneAuth: DataPlaneAuthConfig;
+  controlPlane: ControlPlaneConfig;
   logging: LoggingConfig;
   metrics: MetricsConfig;
   telemetry: TelemetryConfig;

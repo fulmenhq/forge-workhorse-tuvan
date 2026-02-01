@@ -19,11 +19,11 @@ describe("Metrics Endpoint", () => {
   beforeAll(async () => {
     const config = await loadConfig();
     const identity = await loadIdentity();
-    app = await createServer(identity, config.server);
-  });
+    app = await createServer(identity, { ...config.server, dataPlaneAuth: config.dataPlaneAuth });
+  }, 20000);
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it("GET /metrics should return 200 OK and Prometheus text", async () => {

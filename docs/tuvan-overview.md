@@ -22,15 +22,15 @@ Tuvan is a production-ready TypeScript workhorse application template from the F
 
 ### Core Components
 
-| Component           | Status              | Purpose                                                                        | Key Features                                                               |
-| ------------------- | ------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| **HTTP Server**     | ✅ Implemented      | Fastify router with standard endpoints, graceful shutdown, middleware support | TypeScript-first, high performance, plugin ecosystem                       |
-| **CLI Framework**   | ✅ Implemented      | Commander.js-based commands (serve, version, health, envinfo, doctor)          | Simple API, TypeScript-friendly, extensible                                |
-| **Configuration**   | ✅ Implemented      | Defaults → file → environment variables with XDG compliance                    | Three-layer loading, schema validation, hot reload                         |
-| **Observability**   | ✅ Implemented      | Structured logging, Prometheus metrics, health checks                          | Pino-based logging, Request correlation, OTLP export                       |
-| **Signal Handling** | ✅ Implemented      | Graceful shutdown, config reload, double-tap force quit                        | Cross-platform, LIFO cleanup, HTTP admin endpoint                          |
-| **App Identity**    | ✅ Implemented      | `.fulmen/app.yaml` for template customization                                  | Dynamic env vars, config paths, telemetry namespaces                       |
-| **Exit Codes**      | ✅ Implemented      | Foundry exit codes with semantic meaning                                       | Shell script friendly, metadata logging, operational clarity               |
+| Component           | Status         | Purpose                                                                       | Key Features                                                 |
+| ------------------- | -------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **HTTP Server**     | ✅ Implemented | Fastify router with standard endpoints, graceful shutdown, middleware support | TypeScript-first, high performance, plugin ecosystem         |
+| **CLI Framework**   | ✅ Implemented | Commander.js-based commands (serve, version, health, envinfo, doctor)         | Simple API, TypeScript-friendly, extensible                  |
+| **Configuration**   | ✅ Implemented | Defaults → file → environment variables with XDG compliance                   | Three-layer loading, schema validation, hot reload           |
+| **Observability**   | ✅ Implemented | Structured logging, Prometheus metrics, health checks                         | Pino-based logging, Request correlation, OTLP export         |
+| **Signal Handling** | ✅ Implemented | Graceful shutdown, config reload, double-tap force quit                       | Cross-platform, LIFO cleanup, HTTP admin endpoint            |
+| **App Identity**    | ✅ Implemented | `.fulmen/app.yaml` for template customization                                 | Dynamic env vars, config paths, telemetry namespaces         |
+| **Exit Codes**      | ✅ Implemented | Foundry exit codes with semantic meaning                                      | Shell script friendly, metadata logging, operational clarity |
 
 ### Standard Endpoints
 
@@ -42,8 +42,33 @@ Tuvan is a production-ready TypeScript workhorse application template from the F
 | `/health/startup` | GET    | Startup probe to signal init completion          | JSON probe response (`200/503`)      |
 | `/version`        | GET    | Version and identity information                 | JSON with app, SSOT, runtime details |
 | `/metrics`        | GET    | Prometheus/OpenMetrics scrape endpoint           | OpenMetrics format for scraping      |
+| `/openapi.yaml`   | GET    | OpenAPI 3.1 specification (YAML)                 | YAML                                 |
+| `/openapi.json`   | GET    | OpenAPI 3.1 specification (JSON)                 | JSON                                 |
+
+### Control Plane Endpoints
+
+The template also runs a separate **control plane** HTTP server (default `127.0.0.1:8081`) for operational endpoints.
+
+| Endpoint                   | Method | Purpose                         | Notes                       |
+| -------------------------- | ------ | ------------------------------- | --------------------------- |
+| `{basePath}/`              | GET    | Control plane discovery         | basePath default `/control` |
+| `{basePath}/signal`        | POST   | Signal injection (ops fallback) | Auth-gated when exposed     |
+| `{basePath}/config/reload` | POST   | Trigger config reload           | Uses three-layer loader     |
 
 All non-2xx responses share a standardized error envelope ensuring consistent JSON errors for orchestrators and operators.
+
+### Schema and Validation (TypeBox)
+
+HTTP routes define schemas using TypeBox. In Fastify, those schemas serve two purposes:
+
+- Runtime validation (AJV)
+- OpenAPI generation
+
+Recommended conventions in this template:
+
+- Request objects default to `additionalProperties: false` to avoid silently accepting unknown fields.
+- Prefer explicit constraints for operator-facing fields (length, patterns, enums).
+- If you rely on JSON Schema `format` (like `uuid`), enable AJV format support so formats are actually enforced.
 
 ### CLI Commands
 
@@ -73,16 +98,16 @@ All non-2xx responses share a standardized error envelope ensuring consistent JS
 
 ### External Dependencies
 
-| Dependency              | Version | Purpose                               | Integration              |
-| ----------------------- | ------- | ------------------------------------- | ------------------------ |
-| **fastify**             | ^5.0.0  | HTTP framework with TypeScript        | High performance routing |
-| **commander**           | ^12.0.0 | CLI framework                         | Command structure        |
-| **pino**                | ^9.0.0  | High-performance structured logging   | Via tsfulmen/logging     |
-| **@fastify/cors**       | ^10.0.0 | CORS middleware                       | Security                 |
-| **@fastify/helmet**     | ^12.0.0 | Security headers                      | Security                 |
-| **vitest**              | ^4.0.0  | Fast, modern testing framework        | Testing                  |
-| **@biomejs/biome**      | ^2.0.0  | Fast linting and formatting           | Code quality             |
-| **@fulmenhq/tsfulmen**  | ^0.1.8  | Fulmen helper library                 | Ecosystem integration    |
+| Dependency             | Version | Purpose                             | Integration              |
+| ---------------------- | ------- | ----------------------------------- | ------------------------ |
+| **fastify**            | ^5.0.0  | HTTP framework with TypeScript      | High performance routing |
+| **commander**          | ^12.0.0 | CLI framework                       | Command structure        |
+| **pino**               | ^9.0.0  | High-performance structured logging | Via tsfulmen/logging     |
+| **@fastify/cors**      | ^10.0.0 | CORS middleware                     | Security                 |
+| **@fastify/helmet**    | ^12.0.0 | Security headers                    | Security                 |
+| **vitest**             | ^4.0.0  | Fast, modern testing framework      | Testing                  |
+| **@biomejs/biome**     | ^2.0.0  | Fast linting and formatting         | Code quality             |
+| **@fulmenhq/tsfulmen** | ^0.1.8  | Fulmen helper library               | Ecosystem integration    |
 
 ## Configuration Management
 
@@ -103,17 +128,39 @@ $XDG_CONFIG_HOME/fulmen/tuvan/config.yaml
 
 All environment variables use the app identity prefix:
 
+This workhorse supports both:
+
+- Nested env var mapping via `tsfulmen/config` (e.g. `TUVAN_SERVER_PORT` -> `server.port`)
+- Template-friendly aliases for common keys (e.g. `TUVAN_PORT` -> `server.port`)
+
 ```bash
-# Server configuration
+# Data plane (canonical)
 TUVAN_SERVER_HOST=localhost
 TUVAN_SERVER_PORT=8080
 
-# Logging configuration
-TUVAN_LOG_LEVEL=info
-TUVAN_LOG_PROFILE=structured
+# Data plane (aliases)
+# TUVAN_HOST=localhost
+# TUVAN_PORT=8080
 
-# Metrics configuration
-TUVAN_METRICS_ENABLED=true
+# Control plane (aliases)
+TUVAN_CONTROL_PLANE_HOST=127.0.0.1
+TUVAN_CONTROL_PLANE_PORT=8081
+TUVAN_ADMIN_BASE_PATH=/control
+TUVAN_ADMIN_TOKEN=change-me-long-token
+
+# Logging (canonical)
+TUVAN_LOGGING_LEVEL=info
+TUVAN_LOGGING_PROFILE=structured
+
+# Logging (aliases)
+# TUVAN_LOG_LEVEL=info
+# TUVAN_LOG_PROFILE=structured
+
+# Data plane auth (starter aliases)
+TUVAN_AUTH_ENABLED=true
+TUVAN_AUTH_MODE=basicAuth
+TUVAN_AUTH_BASIC_USER=admin
+TUVAN_AUTH_BASIC_PASSWORD=change-me
 ```
 
 ## Observability Stack
@@ -132,18 +179,18 @@ Built-in Prometheus metrics with standard exporters:
 
 ```typescript
 // Counters for business metrics
-import { counter } from '@fulmenhq/tsfulmen/telemetry';
-const requestCounter = counter('http_requests_total');
+import { counter } from "@fulmenhq/tsfulmen/telemetry";
+const requestCounter = counter("http_requests_total");
 requestCounter.inc();
 
 // Gauges for system state
-import { gauge } from '@fulmenhq/tsfulmen/telemetry';
-const activeConnections = gauge('active_connections');
+import { gauge } from "@fulmenhq/tsfulmen/telemetry";
+const activeConnections = gauge("active_connections");
 activeConnections.set(42);
 
 // Histograms for performance
-import { histogram } from '@fulmenhq/tsfulmen/telemetry';
-const requestDuration = histogram('http_request_duration_seconds');
+import { histogram } from "@fulmenhq/tsfulmen/telemetry";
+const requestDuration = histogram("http_request_duration_seconds");
 requestDuration.observe(0.123);
 ```
 
@@ -163,15 +210,15 @@ Comprehensive health monitoring with:
 LIFO cleanup chain ensures proper resource release:
 
 ```typescript
-import { onShutdown } from '@fulmenhq/tsfulmen/signals';
+import { onShutdown } from "@fulmenhq/tsfulmen/signals";
 
 onShutdown(async () => {
-  logger.info('Flushing metrics...');
+  logger.info("Flushing metrics...");
   await telemetry.flush();
 });
 
 onShutdown(async () => {
-  logger.info('Closing database...');
+  logger.info("Closing database...");
   await db.close();
 });
 ```
@@ -181,13 +228,13 @@ onShutdown(async () => {
 SIGHUP handling for zero-downtime configuration updates:
 
 ```typescript
-import { onReload } from '@fulmenhq/tsfulmen/signals';
+import { onReload } from "@fulmenhq/tsfulmen/signals";
 
 onReload(async () => {
-  logger.info('Reloading configuration...');
+  logger.info("Reloading configuration...");
   const newConfig = await loadConfig(configPath);
   if (!validateConfig(newConfig)) {
-    throw new Error('Invalid config');
+    throw new Error("Invalid config");
   }
   applyConfig(newConfig);
 });
@@ -198,11 +245,11 @@ onReload(async () => {
 Operator-friendly Ctrl+C handling with configurable window:
 
 ```typescript
-import { enableDoubleTap } from '@fulmenhq/tsfulmen/signals';
+import { enableDoubleTap } from "@fulmenhq/tsfulmen/signals";
 
 enableDoubleTap({
   window: 2000, // 2 second window
-  message: 'Press Ctrl+C again to force quit',
+  message: "Press Ctrl+C again to force quit",
 });
 ```
 
@@ -355,13 +402,10 @@ Production-ready configuration patterns:
 ### Middleware Integration
 
 ```typescript
-import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyRequest, FastifyReply } from "fastify";
 
 // Add custom middleware to HTTP stack
-async function customMiddleware(
-  request: FastifyRequest,
-  reply: FastifyReply
-) {
+async function customMiddleware(request: FastifyRequest, reply: FastifyReply) {
   // Custom logic here
 }
 ```
@@ -369,10 +413,10 @@ async function customMiddleware(
 ### Logging Middleware
 
 ```typescript
-import { createLogger } from '@fulmenhq/tsfulmen/logging';
+import { createLogger } from "@fulmenhq/tsfulmen/logging";
 
-const logger = createLogger('myapp', {
-  profile: 'enterprise',
+const logger = createLogger("myapp", {
+  profile: "enterprise",
   middleware: [
     correlationMiddleware(),
     redactSecretsMiddleware(),
@@ -384,12 +428,12 @@ const logger = createLogger('myapp', {
 ### Metrics Integration
 
 ```typescript
-import { counter, gauge, histogram } from '@fulmenhq/tsfulmen/telemetry';
+import { counter, gauge, histogram } from "@fulmenhq/tsfulmen/telemetry";
 
 // Add custom metrics
-const customCounter = counter('custom_operations_total');
-const customGauge = gauge('custom_state');
-const customHistogram = histogram('custom_duration_seconds');
+const customCounter = counter("custom_operations_total");
+const customGauge = gauge("custom_state");
+const customHistogram = histogram("custom_duration_seconds");
 ```
 
 ## Standards Compliance
@@ -414,6 +458,7 @@ const customHistogram = histogram('custom_duration_seconds');
 ✅ **v0.1.0 Released** - Production Ready
 
 **Completed:**
+
 - ✅ Project planning and architecture
 - ✅ Bootstrap plan documentation
 - ✅ README and overview documentation
@@ -430,9 +475,11 @@ const customHistogram = histogram('custom_duration_seconds');
 - ✅ CI/CD setup
 
 **In Progress:**
+
 - 🚀 v0.1.x maintenance and refinement
 
 **Planned:**
+
 - 📋 Additional production patterns (Phase 5)
 
 ## Resources

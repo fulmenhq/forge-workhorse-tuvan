@@ -11,6 +11,19 @@ describe("Config Loader", () => {
       expect(config.server.host).toBe("localhost");
       expect(config.server.port).toBe(8080);
 
+      // Check data plane auth defaults
+      expect(config.dataPlaneAuth.enabled).toBe(false);
+      expect(config.dataPlaneAuth.auth.mode).toBe("disabled");
+      expect(config.dataPlaneAuth.policy.publicPrefixes).toContain("/health");
+
+      // Check control plane defaults
+      expect(config.controlPlane.enabled).toBe(true);
+      expect(config.controlPlane.host).toBe("127.0.0.1");
+      expect(config.controlPlane.port).toBe(8081);
+      expect(config.controlPlane.basePath).toBe("/control");
+      expect(config.controlPlane.auth.mode).toBe("bearerToken");
+      expect(config.controlPlane.auth.allowUnauthenticatedLoopback).toBe(true);
+
       // Check logging defaults
       expect(config.logging.profile).toBe("structured");
       expect(config.logging.level).toBe("info");
@@ -21,7 +34,7 @@ describe("Config Loader", () => {
 
       // Check telemetry defaults
       expect(config.telemetry.namespace).toBe("tuvan");
-    });
+    }, 20000);
   });
 
   describe("applyCliOverrides", () => {

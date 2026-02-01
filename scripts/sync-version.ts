@@ -32,7 +32,7 @@ function main() {
     // Update package.json
     const packageJson = JSON.parse(readFileSync(PACKAGE_JSON, "utf-8"));
     packageJson.version = version;
-    writeFileSync(PACKAGE_JSON, JSON.stringify(packageJson, null, 2) + "\n", "utf-8");
+    writeFileSync(PACKAGE_JSON, `${JSON.stringify(packageJson, null, 2)}\n`, "utf-8");
 
     console.log(`✅ Version ${version} synchronized to package.json`);
   } catch (error) {

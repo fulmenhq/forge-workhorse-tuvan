@@ -21,17 +21,14 @@
 # - Environment variable prefixes (e.g., TUVAN_PORT → DATA_API_PORT)
 # - Config file paths (e.g., ~/.config/fulmen/tuvan → ~/.config/acmecorp/data-api)
 # - Telemetry namespaces (e.g., tuvan_http_requests_total → data_api_http_requests_total)
-
 app:
   vendor: fulmen
   binary_name: tuvan
   env_prefix: TUVAN_
   config_name: tuvan
   description: "TypeScript workhorse template for production-ready backends"
-
 metadata:
   repository_category: workhorse
-
   # Template info (users can remove this section after refitting)
   template:
     source: forge-workhorse-tuvan

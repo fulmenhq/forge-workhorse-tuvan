@@ -21,12 +21,12 @@ This guide explains how to transform `forge-workhorse-tuvan` into your own produ
 
 ## 1. Prerequisites & Preflight Checklist
 
-| Requirement | Minimum | Notes |
-| --- | --- | --- |
-| Git | 2.43+ | Needed for clone/degit |
-| Node.js | 20.0.0+ | Matches tsfulmen runtime floor |
-| Bun | 1.0.0+ | Preferred package manager (npm works as fallback) |
-| Make | POSIX-compatible | Executes bootstrap/check targets |
+| Requirement | Minimum          | Notes                                             |
+| ----------- | ---------------- | ------------------------------------------------- |
+| Git         | 2.43+            | Needed for clone/degit                            |
+| Node.js     | 20.0.0+          | Matches tsfulmen runtime floor                    |
+| Bun         | 1.0.0+           | Preferred package manager (npm works as fallback) |
+| Make        | POSIX-compatible | Executes bootstrap/check targets                  |
 
 Before customizing:
 
@@ -107,6 +107,20 @@ Why it matters:
 2. Replace every `TUVAN_` prefix in `.env.example`, `.env`, docs, and scripts with your `env_prefix`
 3. Mention the new prefix in `README.md` and this guide for your consumers
 
+Control plane env vars you will typically refit:
+
+- `<PREFIX>CONTROL_PLANE_HOST`
+- `<PREFIX>CONTROL_PLANE_PORT`
+- `<PREFIX>ADMIN_BASE_PATH`
+- `<PREFIX>ADMIN_TOKEN` (do not commit real tokens)
+
+Data plane auth env vars you may refit (starter only):
+
+- `<PREFIX>AUTH_ENABLED`
+- `<PREFIX>AUTH_MODE`
+- `<PREFIX>AUTH_BASIC_USER`
+- `<PREFIX>AUTH_BASIC_PASSWORD`
+
 ### 5.4 Refresh configuration defaults & schemas (as modules land)
 
 Even before config/schema assets are finalized, establish the naming pattern so upgrades remain mechanical:
@@ -186,13 +200,13 @@ Verify endpoints:
 
 ## 8. Troubleshooting
 
-| Symptom | Likely Cause | Fix |
-| --- | --- | --- |
-| Env vars still show `TUVAN_` | Missed prefix replacement in `.env` or code | Search for `TUVAN_` with `rg` and replace |
-| `/version` shows `tuvan` | `core/version.ts` or logger metadata not updated | Update identity imports to use `.fulmen/app.yaml` values |
-| Config file not found | Config directories not renamed or `config_name` mismatch | Align names across `.fulmen/app.yaml`, config paths, and loader options |
-| Tests fail on import paths | Package name in `package.json` not updated | Rename package + adjust `tsconfig.json` path aliases |
-| Vitest cannot find Bun modules | Forgot `bun install` after degitting | Run `make bootstrap` or `bun install` |
+| Symptom                        | Likely Cause                                             | Fix                                                                     |
+| ------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Env vars still show `TUVAN_`   | Missed prefix replacement in `.env` or code              | Search for `TUVAN_` with `rg` and replace                               |
+| `/version` shows `tuvan`       | `core/version.ts` or logger metadata not updated         | Update identity imports to use `.fulmen/app.yaml` values                |
+| Config file not found          | Config directories not renamed or `config_name` mismatch | Align names across `.fulmen/app.yaml`, config paths, and loader options |
+| Tests fail on import paths     | Package name in `package.json` not updated               | Rename package + adjust `tsconfig.json` path aliases                    |
+| Vitest cannot find Bun modules | Forgot `bun install` after degitting                     | Run `make bootstrap` or `bun install`                                   |
 
 ## 9. Advanced Customization Patterns
 

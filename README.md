@@ -1,6 +1,6 @@
 # forge-workhorse-tuvan
 
-> A Fulmen workhorse application template for robust, scalable TypeScript backends
+> A Fulmen workhorse application template for robust, scalable TypeScript backends and CLIs
 
 Named after the Tuvan horse breed from the Russian steppe (Tuva Republic, southern Siberia), renowned for exceptional strength, endurance in harsh conditions, and reliability in demanding environments. The binary is simply called `tuvan`.
 
@@ -10,10 +10,13 @@ Named after the Tuvan horse breed from the Russian steppe (Tuva Republic, southe
 
 - ✅ HTTP server with standard endpoints (`/health`, `/version`, `/metrics`)
 - ✅ CLI with required subcommands (serve, version, health, envinfo, doctor)
+- ✅ Control plane for ops endpoints (signal injection, config reload)
+- ✅ Starter auth wiring (control plane + data plane)
 - ✅ Structured logging with progressive profiles (via tsfulmen)
 - ✅ Three-layer configuration management (Crucible → User → Runtime)
 - ✅ Graceful shutdown and signal handling
 - ✅ Observability and telemetry built-in
+- ✅ Automation-friendly JSON output for diagnostics (`doctor --json`, `envinfo --json`)
 - ✅ CDRL philosophy: Clone → Degit → Refit → Launch
 
 ## Fulmen Ecosystem Layers
@@ -30,7 +33,7 @@ Level 0: Crucible (SSOT - schemas, standards, docs)
 ### Prerequisites
 
 - Node.js 20.0.0+ ([install](https://nodejs.org/))
-- Bun 1.0.0+ ([install](https://bun.sh/)) *or* npm/pnpm
+- Bun 1.0.0+ ([install](https://bun.sh/)) _or_ npm/pnpm
 - TypeScript 5.7+ (installed via dependencies)
 
 ### Bootstrap
@@ -96,7 +99,7 @@ forge-workhorse-tuvan/
 
 ### Dependencies
 
-- **@fulmenhq/tsfulmen v0.1.8+** - Fulmen helper library (config, logging, telemetry, schema validation)
+- **@fulmenhq/tsfulmen v0.2.3+** - Fulmen helper library (config, logging, telemetry, schema validation)
 - **fastify** - HTTP framework (performance, TypeScript-first)
 - **commander** - CLI framework (simple, proven)
 - **pino** - High-performance logging (via tsfulmen)
@@ -114,9 +117,11 @@ tuvan version               # Basic version
 tuvan version --extended    # Full version + SSOT info
 tuvan health                # Self-check
 tuvan envinfo               # Dump config/env/SSOT
+tuvan envinfo --json        # Machine-readable env/config report
 
 # Diagnostics
 tuvan doctor                # Run checks, suggest fixes
+tuvan doctor --json         # Machine-readable diagnostics
 ```
 
 ## Configuration
@@ -130,7 +135,7 @@ Tuvan uses **tsfulmen/config** for canonical three-layer configuration with sche
    - Provides sensible defaults for all configuration options
    - Validated against `schemas/tuvan/v1.0.0/config.schema.json`
 
-2. **Layer 2 (User Overrides)**: `~/.config/<vendor>/<binary-name>.yaml`
+2. **Layer 2 (User Overrides)**: `~/.config/<vendor>/<binary-name>/config.yaml`
    - Discovered via app identity (`.fulmen/app.yaml`)
    - Merged on top of template defaults
    - Optional (falls back to defaults if not present)
@@ -194,7 +199,7 @@ make test
 make test-coverage
 
 # Run specific test file
-bun test src/server/routes/health.test.ts
+bun run test -- src/server/__tests__/health.test.ts
 ```
 
 ### Linting
@@ -292,7 +297,7 @@ Prometheus metrics exposed at `/metrics`:
 
 ### Tracing
 
-Optional OpenTelemetry integration (planned for future releases).
+Tracing is not enabled by default in this template. If you need distributed tracing, wire in OpenTelemetry in your refit.
 
 ## Production Reliability
 
@@ -340,12 +345,12 @@ kill -HUP $(pgrep tuvan)
 
 Tuvan uses standardized exit codes from the Foundry catalog for operational clarity:
 
-| Code | Name          | When                                                 |
-| ---- | ------------- | ---------------------------------------------------- |
-| 0    | Success       | Command completed successfully                       |
-| 1    | Failure       | Generic failure (default for unspecified errors)     |
-| 30   | ConfigInvalid | Configuration file is invalid or logger init failed  |
-| 50   | FileNotFound  | Required file not found (e.g., `.fulmen/app.yaml`)   |
+| Code | Name          | When                                                |
+| ---- | ------------- | --------------------------------------------------- |
+| 0    | Success       | Command completed successfully                      |
+| 1    | Failure       | Generic failure (default for unspecified errors)    |
+| 30   | ConfigInvalid | Configuration file is invalid or logger init failed |
+| 50   | FileNotFound  | Required file not found (e.g., `.fulmen/app.yaml`)  |
 
 **Usage in Shell Scripts:**
 
@@ -394,6 +399,40 @@ Each response includes version metadata, RFC3339 timestamps, and per-check statu
 
 - `GET /metrics` – Prometheus/OpenMetrics format for scraping
 
+## Control Plane
+
+Tuvan runs a separate **control plane** HTTP server for operational endpoints.
+
+- Default bind: `127.0.0.1:8081`
+- Default base path: `/control`
+- Primary endpoint: `POST /control/signal` (signal injection for containerized environments)
+
+### Control Plane Auth (Starter)
+
+- If you set `TUVAN_ADMIN_TOKEN`, requests must include `Authorization: Bearer <token>`.
+- If you bind the control plane to a non-loopback host, the server requires a configured token (startup fails otherwise).
+
+## Data Plane Auth (Starter)
+
+The data plane (main API server) includes optional starter auth wiring.
+
+- Config: `dataPlaneAuth.enabled` + `dataPlaneAuth.auth.mode` (`basicAuth` or `bearerToken`)
+- Policy: endpoints are categorized as `deny`, `public`, `conditional`, `protected` via prefix lists
+
+Recommended quick start (basic auth):
+
+```bash
+export TUVAN_AUTH_ENABLED=true
+export TUVAN_AUTH_MODE=basicAuth
+export TUVAN_AUTH_BASIC_USER=admin
+export TUVAN_AUTH_BASIC_PASSWORD=change-me
+```
+
+Env var notes:
+
+- Canonical server keys are nested (e.g. `TUVAN_SERVER_PORT`); this template also supports aliases like `TUVAN_PORT`.
+- Canonical logging keys are nested (e.g. `TUVAN_LOGGING_LEVEL`); aliases `TUVAN_LOG_LEVEL` and `TUVAN_LOG_PROFILE` are supported.
+
 ### Standardized Errors
 
 All non-2xx responses use a consistent JSON envelope:
@@ -409,7 +448,7 @@ All non-2xx responses use a consistent JSON envelope:
 
 ## Current Status
 
-✅ **v0.1.0 Released** - Production Ready
+✅ **v0.1.1 Released** - Production Ready
 
 This template is now fully operational and compliant with the Fulmen Forge Workhorse Standard.
 
@@ -425,6 +464,8 @@ This template is now fully operational and compliant with the Fulmen Forge Workh
 - [x] Prometheus metrics (tsfulmen)
 - [x] App Identity integration
 - [x] Semantic exit codes
+- [x] Control plane (operational endpoints + signal injection)
+- [x] Starter auth wiring (control plane + data plane)
 - [x] Comprehensive tests (100% pass rate)
 - [x] Complete documentation
 
