@@ -371,12 +371,12 @@ release-build: build-all ## Build release artifacts
 # Pre-commit/push hooks (called by goneat hooks, not directly)
 precommit: ## Run pre-commit hooks
 	@echo "Running pre-commit validation..."
-	@$(GONEAT_RESOLVE); $$GONEAT format; $$GONEAT assess --check --categories format,lint --fail-on critical
+	@$(GONEAT_RESOLVE); $$GONEAT format --types yaml,markdown; $$GONEAT assess --check --categories format,lint --fail-on critical
 	@echo "Pre-commit checks passed"
 
 prepush: ## Run pre-push hooks
 	@echo "Running pre-push validation..."
-	@$(GONEAT_RESOLVE); $$GONEAT format; $$GONEAT assess --check --categories format,lint,security,dependencies --fail-on high
+	@$(GONEAT_RESOLVE); $$GONEAT format --types yaml,markdown; $$GONEAT assess --check --categories format,lint,security,dependencies --fail-on high
 	@echo "Pre-push checks passed"
 
 # App identity validation

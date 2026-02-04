@@ -4,9 +4,7 @@
   "title": "draft-2020-12 sample",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "id"
-  ],
+  "required": ["id"],
   "properties": {
     "id": {
       "type": "string",

@@ -3,9 +3,7 @@
   "title": "draft-07 sample",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "id"
-  ],
+  "required": ["id"],
   "properties": {
     "id": {
       "type": "string",
