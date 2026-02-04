@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Upgraded `@fulmenhq/tsfulmen` to **v0.2.3**.
+
+- Upgraded `@fulmenhq/tsfulmen` to **v0.2.7**.
 - Improved environment variable ergonomics (aliases + richer `envinfo`/`doctor` reporting).
 - Defaulted control plane base path to `/control`.
 

@@ -11,7 +11,7 @@ v0.1.1 expands Tuvan into a more complete CLI/server "workhorse" by adding an op
 - **Control plane (ops endpoints)**: A separate control plane server (default `127.0.0.1:8081/control`) supports operational workflows like signal injection for containerized environments.
 - **Safe-by-default auth**: Control plane auth hardens automatically when bound to non-loopback hosts; the data plane includes optional starter auth modes (basic auth or bearer token).
 - **Better diagnostics for automation**: `tuvan doctor --json` and `tuvan envinfo --json` make it easy to integrate checks into CI and scripts.
-- **Updated foundation**: Upgraded to `@fulmenhq/tsfulmen` v0.2.3 and improved env var ergonomics.
+- **Updated foundation**: Upgraded to `@fulmenhq/tsfulmen` v0.2.7 and improved env var ergonomics.
 
 ## v0.1.0: The Production-Ready TypeScript Workhorse
 
