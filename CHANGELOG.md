@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-02-06
+
+### Added
+
+- **LICENSE file**: MIT license with trademark notices and acceptable use guidelines, adapted from the gofulmen canonical template. Required for public repository readiness.
+
+### Changed
+
+- Bumped `fastify` from 5.7.2 to **5.7.4** (patch).
+- Bumped `@biomejs/biome` from 2.3.13 to **2.3.14** (patch, dev).
+- Bumped `@types/node` from 22.19.7 to **22.19.9** (patch, dev).
+
+### Security
+
+- Verified zero vulnerabilities across 146 packages via goneat/grype SBOM scan.
+- Verified zero copyleft (GPL/LGPL/AGPL) license dependencies via license-checker.
+
 ## [0.1.1] - 2026-02-01
 
 ### Added
@@ -53,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated dependency on `@fulmenhq/tsfulmen` to v0.1.13 for full configuration support.
 - Refactored project structure to align with Fulmen Forge Workhorse Standard.
 
-[Unreleased]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/fulmenhq/forge-workhorse-tuvan/releases/tag/v0.1.0

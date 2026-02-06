@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## v0.1.2 (2026-02-06): Public Readiness — Licensing + Dependency Refresh
+
+A small housekeeping release preparing forge-workhorse-tuvan for public visibility.
+
+### Highlights
+
+- **LICENSE file added**: MIT license with trademark notices and acceptable use guidelines, adapted from the gofulmen canonical template. The README already referenced this file — now it exists.
+- **Dependency patch bumps**: fastify 5.7.4, @biomejs/biome 2.3.14, @types/node 22.19.9.
+- **Clean security posture**: Zero vulnerabilities (146 packages scanned via grype), zero copyleft licenses confirmed via license-checker.
+
 ## v0.1.1 (2026-02-01): Control Plane + Starter Auth + Better DX
 
 v0.1.1 expands Tuvan into a more complete CLI/server "workhorse" by adding an operational control plane, starter auth wiring, and better automation-friendly diagnostics.
