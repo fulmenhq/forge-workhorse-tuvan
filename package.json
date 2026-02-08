@@ -1,6 +1,6 @@
 {
   "name": "@fulmenhq/forge-workhorse-tuvan",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Fulmen TypeScript workhorse template - production-ready foundation for robust, scalable Node.js backends",
   "author": "3 Leaps, LLC",
   "license": "MIT",
@@ -32,6 +32,8 @@
     "lint:fix": "biome check --write src/",
     "typecheck": "tsc --noEmit",
     "check:all": "make check-all",
+    "build:all": "bun scripts/build-all.ts",
+    "build:local": "bun build src/index.ts --compile --outfile dist/tuvan",
     "clean": "make clean"
   },
   "dependencies": {

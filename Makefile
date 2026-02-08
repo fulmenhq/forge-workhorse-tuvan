@@ -110,7 +110,7 @@ help: ## Show this help message
 	@echo "  lint            - Run linting checks"
 	@echo "  test            - Run all tests"
 	@echo "  build           - Build distributable artifacts"
-	@echo "  build-all       - Build multi-platform binaries (N/A for Node.js template)"
+	@echo "  build-all       - Build cross-platform binaries (bun build --compile)"
 	@echo "  clean           - Remove build artifacts and caches"
 	@echo "  fmt             - Format code"
 	@echo "  version         - Print current version"
@@ -318,10 +318,10 @@ build: ## Build distributable artifacts
 	@chmod +x $(BIN_DIR)/$(BINARY_NAME)
 	@echo "Build complete - $(BIN_DIR)/$(BINARY_NAME) ready"
 
-build-all: build ## Build multi-platform binaries (N/A for Node.js - delegates to build)
-	@echo "Multi-platform native binaries not applicable for Node.js template"
-	@echo "   Template distributes as npm package/source code"
-	@echo "Build-all satisfied via standard build"
+build-all: build ## Build cross-platform binaries (bun build --compile)
+	@echo "Building cross-platform binaries..."
+	@bun run build:all
+	@echo "Cross-platform binaries built to $(DIST_RELEASE)/"
 
 # OpenAPI specification generation
 openapi: ## Generate OpenAPI specification from TypeBox schemas
@@ -365,8 +365,11 @@ release-prepare: ## Prepare for release
 	@echo "Release prepared"
 
 release-build: build-all ## Build release artifacts
-	@echo "Building release for $(VERSION)..."
-	@echo "Release build complete"
+	@echo "Packaging release for $(VERSION)..."
+	@npm pack --pack-destination $(DIST_RELEASE)/
+	@cd $(DIST_RELEASE) && for f in *.tgz; do [ -f "$$f" ] && mv "$$f" "$(BINARY_NAME)-$(VERSION).tgz" 2>/dev/null; break; done
+	@./scripts/generate-checksums.sh "$(DIST_RELEASE)" "$(BINARY_NAME)"
+	@echo "Release build complete — artifacts in $(DIST_RELEASE)/"
 
 # Pre-commit/push hooks (called by goneat hooks, not directly)
 precommit: ## Run pre-commit hooks

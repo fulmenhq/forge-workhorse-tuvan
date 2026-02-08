@@ -163,11 +163,52 @@ const configPaths = {
 - `docs/development/fulmen_cdrl_guide.md`: update this file to describe your refit specifics once you finish
 - `LICENSE`, `MAINTAINERS.md`: set ownership and point-of-contact info
 
-### 5.8 Configure automation
+### 5.8 Configure CI/CD workflows
 
-- Enable your CI provider (GitHub Actions, etc.) with equivalent lint/test/build steps
-- Keep Makefile targets intact so Fulmen tooling works if you ever upstream fixes
-- Document any deviations in `.plans/` for auditability (the directory stays gitignored)
+The template ships with three GitHub Actions workflows in `.github/workflows/`:
+
+| Workflow      | Trigger                    | Purpose                                        |
+| ------------- | -------------------------- | ---------------------------------------------- |
+| `ci.yml`      | Push to `main`, PRs        | Format, lint, typecheck, test, build           |
+| `release.yml` | Semver tag push (`v*.*.*`) | Build binaries, npm pack, draft GitHub release |
+| `publish.yml` | Manual (workflow_dispatch) | OIDC npm publishing (optional)                 |
+
+**What to keep as-is:**
+
+- `ci.yml` — works without changes after refit (no hardcoded project names)
+- `publish.yml` — generic OIDC publishing template; just create the `publish-npm` GitHub Environment
+
+**What to customize:**
+
+- `release.yml` — update the npm tarball rename step if you change the package name in `package.json`:
+
+  ```yaml
+  # Change this line to match your scoped package name:
+  mv your-scope-your-package-${VERSION}.tgz your-app-${VERSION}.tgz
+  ```
+
+**Cross-platform binaries:**
+
+The release workflow builds standalone binaries using `bun build --compile` for five platforms (Linux x64/arm64, macOS x64/arm64, Windows x64). Each binary embeds the Bun runtime (~50-90 MB). The `scripts/build-all.ts` script reads your `binary_name` from `.fulmen/app.yaml` automatically.
+
+If you prefer lighter JS bundles instead of compiled binaries, replace `bun build --compile` with `bun build --target node` (see brooklyn-mcp for this pattern).
+
+Non-bun users cannot produce compiled binaries — document alternative deployment methods (e.g., `npm install -g` or Docker) for your consumers.
+
+**Release signing:**
+
+The signing workflow uses environment variables prefixed with your `SIGNING_ENV_PREFIX` from the Makefile. After refitting:
+
+1. Update `SIGNING_APP_NAME` and `SIGNING_ENV_PREFIX` in the Makefile
+2. Set signing key paths using your new prefix (e.g., `MYAPI_MINISIGN_KEY`)
+3. See `RELEASE_CHECKLIST.md` for the full signing workflow
+
+**What to remove (if not needed):**
+
+- `publish.yml` — delete if you won't publish to npm
+- Release signing targets in Makefile — delete if you won't sign releases (see Makefile comments)
+
+Keep Makefile targets intact so Fulmen tooling works if you ever upstream fixes. Document any deviations in `.plans/` for auditability.
 
 ## 6. Launch
 

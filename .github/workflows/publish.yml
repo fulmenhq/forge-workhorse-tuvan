@@ -1,0 +1,77 @@
+# npm Publishing (Optional Template)
+#
+# OIDC trusted publishing to npm — no NPM_TOKEN secret needed.
+# Triggered manually via workflow_dispatch.
+#
+# SETUP (for CDRL users who want npm publishing):
+#   1. Create a GitHub Environment named "publish-npm"
+#   2. Link your npm package to GitHub via npm's "Trusted Publishing" settings
+#   3. Optionally add tag-based deployment protection rules
+#
+# This workflow is included as a starting point. Tuvan itself is not
+# published to npm — it's a template meant to be CDRL'd.
+name: Publish to npm
+"on":
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (validate without publishing)"
+        required: false
+        default: false
+        type: boolean
+permissions:
+  id-token: write
+  contents: read
+env:
+  BUN_VERSION: "1.2.22"
+jobs:
+  publish:
+    name: Publish to npm (OIDC)
+    runs-on: ubuntu-latest
+    environment: publish-npm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin
+          key: ${{ runner.os }}-toolchain-goneat-v0.5.2
+          restore-keys: |
+            ${{ runner.os }}-toolchain-goneat-
+      - name: Bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make bootstrap
+      - name: Build
+        run: make build
+      - name: Quality gate
+        run: make check-all
+      - name: Publish to npm
+        run: |
+          # Install npm with OIDC support (hosted runner npm may be outdated)
+          echo "Installing npm@latest locally for OIDC support..."
+          npm install --no-save npm@latest
+          LOCAL_NPM="node ./node_modules/npm/bin/npm-cli.js"
+          echo "npm version: $($LOCAL_NPM --version)"
+
+          # Force OIDC mode — prevent any token auth from interfering
+          unset NODE_AUTH_TOKEN NPM_TOKEN
+          export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/npmrc-oidc"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' 'always-auth=false' > "$NPM_CONFIG_USERCONFIG"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Dry run mode — validating package..."
+            npm pack --dry-run
+            echo "Dry run complete (no publish)"
+          else
+            echo "Publishing to npm via OIDC..."
+            $LOCAL_NPM publish --access public --provenance
+            echo "Published successfully"
+          fi
