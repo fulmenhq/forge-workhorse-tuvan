@@ -44,6 +44,14 @@ export async function createControlPlaneServer(options: {
   // Fastify's AJV plugin type intentionally accepts `unknown` options;
   // tsfulmen's helper uses a narrower options type.
   // Wrap it to keep typecheck/build stable across Fastify upgrades.
+  //
+  // Note (tsfulmen 0.3.0): tsfulmen depends on ajv ^8.20.0 while Fastify's
+  // @fastify/ajv-compiler bundles ajv 8.17.1. The two ajv copies are
+  // structurally identical at runtime (formats apply on any ajv 8.x
+  // instance Fastify hands the plugin), but TS treats them as distinct
+  // class identities (protected members), so the plugin entry is cast to
+  // bridge the two ajv copies. Do not force-dedupe ajv: Fastify pins its
+  // compiler's ajv on purpose.
   const applyAjvFormats = (ajv: Ajv, options?: unknown): Ajv =>
     applyFulmenAjvFormats(ajv, options as never);
 
@@ -56,7 +64,7 @@ export async function createControlPlaneServer(options: {
     genReqId: () => crypto.randomUUID(),
     disableRequestLogging: true,
     ajv: {
-      plugins: [applyAjvFormats],
+      plugins: [applyAjvFormats as never],
     },
   };
 
