@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-08
+
+### Changed
+
+- Upgraded the TypeScript toolchain to align with tsfulmen v0.3.0's dev stack:
+  - `typescript` `^5.7.2` → **`^6.0.3`**
+  - `@biomejs/biome` `^2.3.14` → **`^2.4.16`**
+  - `vitest`, `@vitest/coverage-v8`, `@vitest/ui` `^4.0.18` → **`^4.1.8`**
+  - `tsx` `^4.21.0` → **`^4.22.4`**
+  - `bun-types` `^1.3.8` → **`^1.3.14`**
+- `@types/node` intentionally held on the **`^22.19.9`** (Node 22) line to match the declared runtime floor (`>=22.12.0`), rather than following tsfulmen to the Node 25 types.
+
+All dev-only; no runtime dependency or public API change. Verified under TypeScript 6: typecheck, biome lint, vitest (35/35), build, and a runtime CLI smoke.
+
+### Fixed
+
+- Synced `package.json` `version` to `0.1.6` via `make version-set` (it had drifted from the `VERSION` file). A stale `package.json` version mislabels the `npm pack` tarball in the release workflow.
+
+### Added
+
+- `make release-guard-tag-version` (`scripts/release-guard-tag-version.sh`): asserts `VERSION`, `package.json` version, and the git tag all agree. Wired into `make release-check` and the release workflow (replacing the weaker tag-only check), and documented in `RELEASE_CHECKLIST.md`. Catches the VERSION↔package.json drift class going forward.
+
 ## [0.1.5] - 2026-06-08
 
 ### Changed
