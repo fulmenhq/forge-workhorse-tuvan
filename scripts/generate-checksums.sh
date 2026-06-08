@@ -41,8 +41,13 @@ for f in "${BINARY_NAME}-"*.tar.gz "${BINARY_NAME}-"*.zip; do
     [ -f "$f" ] && artifacts+=("$f")
 done
 
-# Platform bundle patterns (if Bun compile is used)
-for f in "${BINARY_NAME}-"*-darwin-* "${BINARY_NAME}-"*-linux-* "${BINARY_NAME}-"*-windows-*; do
+# Platform binary patterns (bun build --compile output)
+# Matches both versioned (tuvan-v1.0.0-linux-amd64) and direct (tuvan-linux-amd64)
+for f in "${BINARY_NAME}-"*; do
+    # Skip archives already handled above
+    case "$f" in *.tgz|*.tar.gz|*.zip) continue ;; esac
+    # Skip checksum/signature files
+    case "$f" in SHA*|*.sig|*.minisig|*.asc) continue ;; esac
     [ -f "$f" ] && artifacts+=("$f")
 done
 

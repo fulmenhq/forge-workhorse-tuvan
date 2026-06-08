@@ -1,0 +1,61 @@
+# Continuous Integration
+#
+# Runs on every push to main and on pull requests.
+# Single quality-gate job: format, lint, typecheck, test, build.
+#
+# CDRL: Keep this workflow as-is after refitting .fulmen/app.yaml.
+# No project-specific names are hardcoded here.
+name: CI
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+env:
+  BUN_VERSION: "1.2.22"
+  # Single pin for the goneat toolchain: feeds both the cache key below and
+  # `make bootstrap` (Make's ?= respects this env value over the Makefile default).
+  GONEAT_VERSION: "v0.5.13"
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          cache: true
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin
+          # Exact-match only — no broad restore-keys. A version-bump cache miss
+          # must NOT fall back to an older goneat (bootstrap is version-aware and
+          # would reinstall, but exact-only keeps the cache honest per-version).
+          key: ${{ runner.os }}-toolchain-goneat-${{ env.GONEAT_VERSION }}
+      - name: Bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make bootstrap
+      - name: Format check (YAML + Markdown)
+        run: |
+          goneat format --types yaml,markdown
+          git diff --exit-code
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun run test
+      - name: Build
+        run: make build

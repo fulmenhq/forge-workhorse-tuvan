@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-07
+
+### Changed
+
+- Upgraded `@fulmenhq/tsfulmen` to **v0.3.0** (downstream adoption of the v0.3.0 majors wave — archiver 8, pino 10, commander 15, TypeScript 6 — all internal to tsfulmen; tuvan's public API is unchanged).
+- **BREAKING (toolchain): raised the Node engine floor to `>=22.12.0`** (was `>=20.0.0`), matching tsfulmen v0.3.0. The floor is driven by commander 15 being ESM-only. The Bun floor is unchanged.
+
+### Fixed
+
+- Bridged an ajv type-identity mismatch surfaced by the bump: tsfulmen v0.3.0 depends on `ajv ^8.20.0` while Fastify's `@fastify/ajv-compiler` bundles `ajv 8.17.1`, so the two `ajv` copies are distinct TypeScript class identities. The Fastify AJV plugin entry is now cast at the type boundary in `src/server/app.ts` and `src/server/control-plane.ts`. No runtime change — `applyFulmenAjvFormats` applies formats to whatever ajv instance Fastify hands the plugin (compatible across ajv 8.x). Fastify's compiler ajv is intentionally left un-deduped.
+- Reordered re-exports in `src/observability/logger.ts` to satisfy Biome `organizeImports`.
+
+## [0.1.3] - 2026-06-07
+
+### Added
+
+- **CI/CD workflows**: GitHub Actions for the CI quality gate (`ci.yml` — format, lint, typecheck, test, build), release artifact generation (`release.yml`), and an npm publish template (`publish.yml`).
+- **Cross-platform binaries**: `scripts/build-all.ts` compiles 5 targets via `bun build --compile`; wired into `build:all` (Makefile + package.json). Checksum globbing updated for the new binary naming.
+- **Release checklist**: `RELEASE_CHECKLIST.md` adapted from fulseed.
+
+### Changed
+
+- Expanded the CDRL guide and `docs/tuvan-overview.md` with CI/CD documentation.
+
 ## [0.1.2] - 2026-02-06
 
 ### Added

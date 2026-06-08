@@ -1,0 +1,111 @@
+# Release Artifact Generation
+#
+# Triggered when a semver tag (v*.*.*) is pushed.
+# Validates VERSION, runs quality gates, builds cross-platform binaries,
+# packages npm tarball, generates checksums, and creates a DRAFT GitHub release.
+#
+# After CI creates the draft, the maintainer runs the local signing workflow:
+#   make release-download TAG=vX.Y.Z
+#   make release-verify-checksums
+#   make release-sign TAG=vX.Y.Z
+#   make release-export-keys
+#   make release-upload-provenance TAG=vX.Y.Z
+#
+# CDRL: Update the tarball rename step if you change the package name.
+name: Release
+"on":
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+permissions:
+  contents: write
+env:
+  BUN_VERSION: "1.2.22"
+  # Single pin for the goneat toolchain: feeds both the cache key below and
+  # `make bootstrap` (Make's ?= respects this env value over the Makefile default).
+  GONEAT_VERSION: "v0.5.13"
+jobs:
+  release:
+    name: Build & Draft Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify tag matches VERSION
+        run: |
+          VERSION=$(cat VERSION)
+          TAG=${GITHUB_REF#refs/tags/v}
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match VERSION file ($VERSION)"
+            exit 1
+          fi
+          echo "Tag matches VERSION: $VERSION"
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          cache: true
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin
+          # Exact-match only — no broad restore-keys. A version-bump cache miss
+          # must NOT fall back to an older goneat (bootstrap is version-aware and
+          # would reinstall, but exact-only keeps the cache honest per-version).
+          key: ${{ runner.os }}-toolchain-goneat-${{ env.GONEAT_VERSION }}
+      - name: Bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make bootstrap
+      - name: Quality gate
+        run: |
+          goneat format --types yaml,markdown
+          git diff --exit-code
+          bun run lint
+          bun run typecheck
+          bun run test
+      - name: Build TypeScript
+        run: make build
+      - name: Build cross-platform binaries
+        run: bun run build:all
+      - name: Package npm tarball
+        run: |
+          VERSION=$(cat VERSION)
+          npm pack --pack-destination dist/release/
+          # Rename scoped tarball to simpler name for release page
+          # CDRL: Update this if you change the package name in package.json
+          cd dist/release && mv fulmenhq-forge-workhorse-tuvan-${VERSION}.tgz tuvan-${VERSION}.tgz
+      - name: Generate checksums
+        run: ./scripts/generate-checksums.sh dist/release tuvan
+      - name: Create draft GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(cat VERSION)
+          TAG="v${VERSION}"
+          NOTES_FILE="docs/releases/v${VERSION}.md"
+
+          if [ -f "${NOTES_FILE}" ]; then
+            NOTES_ARGS="--notes-file ${NOTES_FILE}"
+          else
+            NOTES_ARGS="--generate-notes"
+          fi
+
+          echo "Creating draft release for ${TAG}..."
+          ls -la dist/release/
+
+          # shellcheck disable=SC2086
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --draft \
+            --verify-tag \
+            ${NOTES_ARGS} \
+            dist/release/*
+
+          echo "Draft release created: https://github.com/${{ github.repository }}/releases/tag/${TAG}"

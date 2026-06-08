@@ -228,6 +228,6 @@ export function resetLogger(): void {
   currentProfile = LoggingProfile.STRUCTURED;
 }
 
+export type { TSFulmenLogger as Logger };
 // Re-export types and enums for convenience
 export { LoggingProfile };
-export type { TSFulmenLogger as Logger };

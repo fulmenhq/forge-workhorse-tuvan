@@ -77,7 +77,11 @@ BINDIR_RESOLVE = \
 	fi
 
 # Tooling - minimum versions (won't downgrade existing installs)
-GONEAT_VERSION ?= v0.5.2
+GONEAT_VERSION ?= v0.5.13
+
+# Trust anchor installer (sfetch). Bootstrap self-installs sfetch when missing
+# so CI runners and fresh checkouts don't need it pre-provisioned.
+SFETCH_INSTALL_URL ?= https://github.com/3leaps/sfetch/releases/latest/download/install-sfetch.sh
 
 SFETCH_RESOLVE = \
 	$(BINDIR_RESOLVE); \
@@ -110,7 +114,7 @@ help: ## Show this help message
 	@echo "  lint            - Run linting checks"
 	@echo "  test            - Run all tests"
 	@echo "  build           - Build distributable artifacts"
-	@echo "  build-all       - Build multi-platform binaries (N/A for Node.js template)"
+	@echo "  build-all       - Build cross-platform binaries (bun build --compile)"
 	@echo "  clean           - Remove build artifacts and caches"
 	@echo "  fmt             - Format code"
 	@echo "  version         - Print current version"
@@ -148,9 +152,36 @@ help: ## Show this help message
 # Bootstrap targets
 bootstrap: ## Install external tools (sfetch, goneat) and dependencies
 	@echo "Installing external tools..."
-	@$(SFETCH_RESOLVE); if [ -z "$$SFETCH" ]; then echo "sfetch not found (required trust anchor)."; echo ""; echo "Install sfetch, verify it, then re-run bootstrap:"; echo "  curl -sSfL https://github.com/3leaps/sfetch/releases/latest/download/install-sfetch.sh | bash"; echo "  sfetch --self-verify"; echo ""; exit 1; fi
+	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; $(SFETCH_RESOLVE); if [ -z "$$SFETCH" ]; then \
+		echo "-> sfetch not found; installing trust anchor into $$BINDIR..."; \
+		if [ -n "$$GITHUB_TOKEN" ]; then \
+			echo "   (using GITHUB_TOKEN for authenticated request)"; \
+			curl -H "Authorization: token $$GITHUB_TOKEN" -sSfL "$(SFETCH_INSTALL_URL)" -o /tmp/install-sfetch.sh && bash /tmp/install-sfetch.sh --dir "$$BINDIR" --yes; \
+		elif command -v curl >/dev/null 2>&1; then \
+			curl -sSfL "$(SFETCH_INSTALL_URL)" -o /tmp/install-sfetch.sh && bash /tmp/install-sfetch.sh --dir "$$BINDIR" --yes; \
+		else \
+			echo "curl required to bootstrap sfetch" >&2; exit 1; \
+		fi; \
+		$(SFETCH_RESOLVE); if [ -z "$$SFETCH" ]; then echo "error: sfetch installation failed (binary not found in $$BINDIR)" >&2; exit 1; fi; \
+	else \
+		echo "-> sfetch already installed"; \
+	fi
 	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; echo "-> sfetch self-verify (trust anchor):"; $(SFETCH_RESOLVE); $$SFETCH --self-verify
-	@$(BINDIR_RESOLVE); if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ]; then rm -f "$$BINDIR/goneat" "$$BINDIR/goneat.exe"; fi; if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ] || ! command -v goneat >/dev/null 2>&1; then echo "-> Installing goneat $(GONEAT_VERSION) to user bin dir..."; $(SFETCH_RESOLVE); $(BINDIR_RESOLVE); $$SFETCH --repo fulmenhq/goneat --tag $(GONEAT_VERSION) --dest-dir "$$BINDIR"; OS_RAW="$$(uname -s 2>/dev/null || echo unknown)"; case "$$OS_RAW" in MINGW*|MSYS*|CYGWIN*) if [ -f "$$BINDIR/goneat.exe" ] && [ ! -f "$$BINDIR/goneat" ]; then mv "$$BINDIR/goneat.exe" "$$BINDIR/goneat"; fi ;; esac; else echo "-> goneat already installed, skipping (use FORCE=1 to reinstall)"; fi; $(GONEAT_RESOLVE); echo "-> goneat: $$($$GONEAT --version 2>&1 | head -n1 || true)"; echo "-> Installing foundation tools via goneat doctor..."; $$GONEAT doctor tools --scope foundation --install --install-package-managers --yes --no-cooling
+	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; \
+		GONEAT=""; if [ -x "$$BINDIR/goneat" ]; then GONEAT="$$BINDIR/goneat"; fi; if [ -z "$$GONEAT" ]; then GONEAT="$$(command -v goneat 2>/dev/null || true)"; fi; \
+		CUR=""; if [ -n "$$GONEAT" ]; then CUR="$$("$$GONEAT" --version 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"; fi; \
+		if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ] || [ "$$CUR" != "$(GONEAT_VERSION)" ]; then \
+			if [ -n "$$CUR" ] && [ "$$CUR" != "$(GONEAT_VERSION)" ]; then echo "-> goneat $$CUR != pinned $(GONEAT_VERSION); reinstalling..."; fi; \
+			rm -f "$$BINDIR/goneat" "$$BINDIR/goneat.exe"; \
+			echo "-> Installing goneat $(GONEAT_VERSION) into $$BINDIR..."; \
+			$(SFETCH_RESOLVE); $$SFETCH --repo fulmenhq/goneat --tag $(GONEAT_VERSION) --dest-dir "$$BINDIR"; \
+			OS_RAW="$$(uname -s 2>/dev/null || echo unknown)"; case "$$OS_RAW" in MINGW*|MSYS*|CYGWIN*) if [ -f "$$BINDIR/goneat.exe" ] && [ ! -f "$$BINDIR/goneat" ]; then mv "$$BINDIR/goneat.exe" "$$BINDIR/goneat"; fi ;; esac; \
+		else \
+			echo "-> goneat $(GONEAT_VERSION) already installed, skipping (use FORCE=1 to reinstall)"; \
+		fi; \
+		$(GONEAT_RESOLVE); echo "-> goneat: $$($$GONEAT --version 2>&1 | head -n1 || true)"; \
+		echo "-> Installing foundation tools via goneat doctor..."; \
+		$$GONEAT doctor tools --scope foundation --install --install-package-managers --yes --no-cooling
 	@echo "-> Installing Node.js dependencies..."
 	@if command -v bun >/dev/null 2>&1; then \
 		echo "-> Using bun..."; \
@@ -318,10 +349,10 @@ build: ## Build distributable artifacts
 	@chmod +x $(BIN_DIR)/$(BINARY_NAME)
 	@echo "Build complete - $(BIN_DIR)/$(BINARY_NAME) ready"
 
-build-all: build ## Build multi-platform binaries (N/A for Node.js - delegates to build)
-	@echo "Multi-platform native binaries not applicable for Node.js template"
-	@echo "   Template distributes as npm package/source code"
-	@echo "Build-all satisfied via standard build"
+build-all: build ## Build cross-platform binaries (bun build --compile)
+	@echo "Building cross-platform binaries..."
+	@bun run build:all
+	@echo "Cross-platform binaries built to $(DIST_RELEASE)/"
 
 # OpenAPI specification generation
 openapi: ## Generate OpenAPI specification from TypeBox schemas
@@ -365,8 +396,11 @@ release-prepare: ## Prepare for release
 	@echo "Release prepared"
 
 release-build: build-all ## Build release artifacts
-	@echo "Building release for $(VERSION)..."
-	@echo "Release build complete"
+	@echo "Packaging release for $(VERSION)..."
+	@npm pack --pack-destination $(DIST_RELEASE)/
+	@cd $(DIST_RELEASE) && for f in *.tgz; do [ -f "$$f" ] && mv "$$f" "$(BINARY_NAME)-$(VERSION).tgz" 2>/dev/null; break; done
+	@./scripts/generate-checksums.sh "$(DIST_RELEASE)" "$(BINARY_NAME)"
+	@echo "Release build complete — artifacts in $(DIST_RELEASE)/"
 
 # Pre-commit/push hooks (called by goneat hooks, not directly)
 precommit: ## Run pre-commit hooks

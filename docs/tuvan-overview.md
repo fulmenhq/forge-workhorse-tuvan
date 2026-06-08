@@ -283,6 +283,70 @@ All application surfaces automatically adapt to your identity:
 - **Config**: Uses your vendor/config paths
 - **Environment**: Uses your env var prefix
 
+## CI/CD Pipeline
+
+### Workflow Architecture
+
+```
+push to main / PR  ->  ci.yml    (format, lint, typecheck, test, build)
+push semver tag    ->  release.yml (validate, build binaries, npm pack, draft release)
+manual trigger     ->  publish.yml (npm publish with OIDC provenance)
+```
+
+### Continuous Integration (`ci.yml`)
+
+Runs on every push to `main` and on pull requests. Single `quality-gate` job on `ubuntu-latest`:
+
+1. Checkout, set up Bun, install minisign
+2. Bootstrap (sfetch -> goneat -> bun install -> hooks)
+3. Format check (YAML + Markdown via goneat)
+4. Biome lint, TypeScript typecheck, Vitest tests
+5. Build (tsc -> dist/)
+
+Uses `GITHUB_TOKEN` at step level to avoid API rate limits. Goneat is cached in `~/.local/bin` between runs.
+
+### Release (`release.yml`)
+
+Triggered when a semver tag (`v*.*.*`) is pushed. Creates a **draft** GitHub release:
+
+1. Validates VERSION file matches the pushed tag
+2. Runs the full quality gate (same as CI)
+3. Builds TypeScript (tsc)
+4. Builds cross-platform standalone binaries (`bun build --compile` for 5 targets)
+5. Packages npm tarball (`npm pack`)
+6. Generates SHA256 and SHA512 checksums
+7. Creates draft GitHub release with all artifacts
+
+After CI creates the draft, the maintainer runs the local signing workflow:
+
+```bash
+make release-download TAG=vX.Y.Z     # Download CI-built artifacts
+make release-verify-checksums         # Verify checksums
+make release-sign TAG=vX.Y.Z         # Sign manifests (minisign + optional PGP)
+make release-export-keys              # Export public keys
+make release-upload-provenance TAG=vX.Y.Z  # Upload provenance + publish
+```
+
+See `RELEASE_CHECKLIST.md` for the complete release process.
+
+### Cross-Platform Binaries
+
+The `scripts/build-all.ts` script builds standalone binaries for five platforms:
+
+| Platform            | Binary Name               |
+| ------------------- | ------------------------- |
+| Linux x86_64        | `tuvan-linux-amd64`       |
+| Linux ARM64         | `tuvan-linux-arm64`       |
+| macOS x86_64        | `tuvan-darwin-amd64`      |
+| macOS Apple Silicon | `tuvan-darwin-arm64`      |
+| Windows x86_64      | `tuvan-windows-amd64.exe` |
+
+Each binary embeds the Bun runtime (~50-90 MB) and is fully standalone — no Node.js or Bun installation required on the target machine.
+
+### npm Publishing (`publish.yml`)
+
+Optional workflow for OIDC trusted publishing to npm. Included as a template for CDRL users — not used by tuvan itself. Requires a `publish-npm` GitHub Environment with deployment protection.
+
 ## Development Workflow
 
 ### Local Development
@@ -472,7 +536,9 @@ const customHistogram = histogram("custom_duration_seconds");
 - ✅ Configuration management
 - ✅ Observability integration
 - ✅ Testing suite
-- ✅ CI/CD setup
+- ✅ CI/CD workflows (ci.yml, release.yml, publish.yml)
+- ✅ Cross-platform binary builds (bun build --compile)
+- ✅ Release signing workflow (minisign + optional PGP)
 
 **In Progress:**
 
@@ -480,7 +546,7 @@ const customHistogram = histogram("custom_duration_seconds");
 
 **Planned:**
 
-- 📋 Additional production patterns (Phase 5)
+- 📋 Additional production patterns
 
 ## Resources
 
