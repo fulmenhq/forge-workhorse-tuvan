@@ -47,8 +47,19 @@ Standard checklist for forge-workhorse-tuvan releases to ensure consistency and 
 
 ### Version Updates
 
-- [ ] Bump VERSION file: `make version-bump-patch` (or `-minor` / `-major`)
-- [ ] Verify package.json synced: `cat package.json | grep version`
+> [!IMPORTANT]
+> **Never hand-edit `VERSION` or `package.json`'s `version`.** Always bump
+> through the make targets so the version propagates to every source of truth
+> (currently `VERSION` → `package.json` via `scripts/sync-version.ts`, and the
+> embedded identity in `dist/` at build time). Hand-editing `VERSION` alone
+> leaves `package.json` stale — which then mislabels the `npm pack` tarball in
+> the release workflow. The `release-guard-tag-version` check below exists to
+> catch exactly that drift.
+
+- [ ] Bump the version via a make target (propagates to `package.json`):
+  - `make version-set VERSION=x.y.z`, or
+  - `make version-bump-patch` (or `-minor` / `-major`)
+- [ ] Confirm `VERSION` and `package.json` agree: `make release-guard-tag-version`
 - [ ] Search for hardcoded version references
 
 ### Git Hygiene
@@ -64,6 +75,7 @@ Standard checklist for forge-workhorse-tuvan releases to ensure consistency and 
 ### Final Validation
 
 - [ ] Full quality gate: `make check-all` (lint + typecheck + test)
+- [ ] Release readiness (includes the version guard): `make release-check`
 - [ ] Build succeeds: `make build`
 - [ ] Fresh clone test: Clone repo fresh, run `make bootstrap && make check-all`
 - [ ] CDRL workflow test: Simulate user refitting template
@@ -77,8 +89,10 @@ Standard checklist for forge-workhorse-tuvan releases to ensure consistency and 
 ### Tagging
 
 - [ ] Push commits: `git push origin main`
+- [ ] Final guard before tagging — VERSION/package.json/tag agree:
+      `TUVAN_RELEASE_TAG=v<version> make release-guard-tag-version`
 - [ ] Create annotated git tag: `git tag -a v<version> -m "Release v<version>"`
-- [ ] Push tag: `git push origin v<version>`
+- [ ] Push tag: `git push origin v<version>` (the release workflow re-runs the same guard)
 - [ ] Wait for CI release workflow to complete (creates **draft** release with unsigned artifacts)
 
 ### Release Artifacts & Signing

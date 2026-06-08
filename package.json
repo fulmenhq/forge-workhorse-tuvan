@@ -1,6 +1,6 @@
 {
   "name": "@fulmenhq/forge-workhorse-tuvan",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Fulmen TypeScript workhorse template - production-ready foundation for robust, scalable Node.js backends",
   "author": "3 Leaps, LLC",
   "license": "MIT",

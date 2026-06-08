@@ -35,15 +35,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Verify tag matches VERSION
-        run: |
-          VERSION=$(cat VERSION)
-          TAG=${GITHUB_REF#refs/tags/v}
-          if [ "$VERSION" != "$TAG" ]; then
-            echo "::error::Tag v$TAG does not match VERSION file ($VERSION)"
-            exit 1
-          fi
-          echo "Tag matches VERSION: $VERSION"
+      - name: Guard — VERSION, package.json, and tag agree
+        env:
+          TUVAN_RELEASE_TAG: ${{ github.ref_name }}
+          TUVAN_REQUIRE_TAG: "1"
+        run: make release-guard-tag-version
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
       - name: Set up Bun

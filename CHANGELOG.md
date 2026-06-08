@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 All dev-only; no runtime dependency or public API change. Verified under TypeScript 6: typecheck, biome lint, vitest (35/35), build, and a runtime CLI smoke.
 
+### Fixed
+
+- Synced `package.json` `version` to `0.1.6` via `make version-set` (it had drifted from the `VERSION` file). A stale `package.json` version mislabels the `npm pack` tarball in the release workflow.
+
+### Added
+
+- `make release-guard-tag-version` (`scripts/release-guard-tag-version.sh`): asserts `VERSION`, `package.json` version, and the git tag all agree. Wired into `make release-check` and the release workflow (replacing the weaker tag-only check), and documented in `RELEASE_CHECKLIST.md`. Catches the VERSION↔package.json drift class going forward.
+
 ## [0.1.5] - 2026-06-08
 
 ### Changed

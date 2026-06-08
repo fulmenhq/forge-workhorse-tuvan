@@ -9,7 +9,7 @@
 
 .PHONY: all help bootstrap bootstrap-force hooks-ensure tools sync dependencies lint fmt test build build-all clean version version-set version-propagate
 .PHONY: version-bump-major version-bump-minor version-bump-patch version-bump-calver
-.PHONY: release-check release-prepare release-build typecheck check-all quality precommit prepush test-watch test-coverage run openapi
+.PHONY: release-check release-prepare release-build release-guard-tag-version typecheck check-all quality precommit prepush test-watch test-coverage run openapi
 .PHONY: validate-app-identity sync-embedded-identity verify-embedded-identity doctor release-download release-checksums release-sign release-export-keys release-verify-checksums release-upload-provenance release-clean
 
 # Variables
@@ -379,6 +379,9 @@ run: ## Run server in development mode
 	fi
 
 # Release targets
+release-guard-tag-version: ## Guard: VERSION == package.json (and == git tag when tagging)
+	@./scripts/release-guard-tag-version.sh
+
 release-check: check-all ## Validate release readiness
 	@echo "Checking release readiness..."
 	@if [ ! -f VERSION ]; then \
@@ -388,6 +391,7 @@ release-check: check-all ## Validate release readiness
 	@if [ ! -f CHANGELOG.md ]; then \
 		echo "CHANGELOG.md missing (recommended)"; \
 	fi
+	@$(MAKE) release-guard-tag-version
 	@echo "Release checks passed"
 
 release-prepare: ## Prepare for release
