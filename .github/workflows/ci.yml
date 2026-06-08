@@ -13,6 +13,9 @@ name: CI
     branches: [main]
 env:
   BUN_VERSION: "1.2.22"
+  # Single pin for the goneat toolchain: feeds both the cache key below and
+  # `make bootstrap` (Make's ?= respects this env value over the Makefile default).
+  GONEAT_VERSION: "v0.5.13"
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -36,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/bin
-          key: ${{ runner.os }}-toolchain-goneat-v0.5.2
+          key: ${{ runner.os }}-toolchain-goneat-${{ env.GONEAT_VERSION }}
           restore-keys: |
             ${{ runner.os }}-toolchain-goneat-
       - name: Bootstrap

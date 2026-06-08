@@ -77,7 +77,7 @@ BINDIR_RESOLVE = \
 	fi
 
 # Tooling - minimum versions (won't downgrade existing installs)
-GONEAT_VERSION ?= v0.5.2
+GONEAT_VERSION ?= v0.5.13
 
 # Trust anchor installer (sfetch). Bootstrap self-installs sfetch when missing
 # so CI runners and fresh checkouts don't need it pre-provisioned.
