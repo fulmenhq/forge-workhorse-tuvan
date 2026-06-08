@@ -167,7 +167,8 @@ bootstrap: ## Install external tools (sfetch, goneat) and dependencies
 		echo "-> sfetch already installed"; \
 	fi
 	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; echo "-> sfetch self-verify (trust anchor):"; $(SFETCH_RESOLVE); $$SFETCH --self-verify
-	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; $(GONEAT_RESOLVE); \
+	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; \
+		GONEAT=""; if [ -x "$$BINDIR/goneat" ]; then GONEAT="$$BINDIR/goneat"; fi; if [ -z "$$GONEAT" ]; then GONEAT="$$(command -v goneat 2>/dev/null || true)"; fi; \
 		CUR=""; if [ -n "$$GONEAT" ]; then CUR="$$("$$GONEAT" --version 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"; fi; \
 		if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ] || [ "$$CUR" != "$(GONEAT_VERSION)" ]; then \
 			if [ -n "$$CUR" ] && [ "$$CUR" != "$(GONEAT_VERSION)" ]; then echo "-> goneat $$CUR != pinned $(GONEAT_VERSION); reinstalling..."; fi; \
