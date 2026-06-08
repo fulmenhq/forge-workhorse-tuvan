@@ -55,9 +55,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/bin
+          # Exact-match only — no broad restore-keys. A version-bump cache miss
+          # must NOT fall back to an older goneat (bootstrap is version-aware and
+          # would reinstall, but exact-only keeps the cache honest per-version).
           key: ${{ runner.os }}-toolchain-goneat-${{ env.GONEAT_VERSION }}
-          restore-keys: |
-            ${{ runner.os }}-toolchain-goneat-
       - name: Bootstrap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

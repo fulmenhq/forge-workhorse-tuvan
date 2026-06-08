@@ -167,7 +167,20 @@ bootstrap: ## Install external tools (sfetch, goneat) and dependencies
 		echo "-> sfetch already installed"; \
 	fi
 	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; echo "-> sfetch self-verify (trust anchor):"; $(SFETCH_RESOLVE); $$SFETCH --self-verify
-	@$(BINDIR_RESOLVE); if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ]; then rm -f "$$BINDIR/goneat" "$$BINDIR/goneat.exe"; fi; if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ] || ! command -v goneat >/dev/null 2>&1; then echo "-> Installing goneat $(GONEAT_VERSION) to user bin dir..."; $(SFETCH_RESOLVE); $(BINDIR_RESOLVE); $$SFETCH --repo fulmenhq/goneat --tag $(GONEAT_VERSION) --dest-dir "$$BINDIR"; OS_RAW="$$(uname -s 2>/dev/null || echo unknown)"; case "$$OS_RAW" in MINGW*|MSYS*|CYGWIN*) if [ -f "$$BINDIR/goneat.exe" ] && [ ! -f "$$BINDIR/goneat" ]; then mv "$$BINDIR/goneat.exe" "$$BINDIR/goneat"; fi ;; esac; else echo "-> goneat already installed, skipping (use FORCE=1 to reinstall)"; fi; $(GONEAT_RESOLVE); echo "-> goneat: $$($$GONEAT --version 2>&1 | head -n1 || true)"; echo "-> Installing foundation tools via goneat doctor..."; $$GONEAT doctor tools --scope foundation --install --install-package-managers --yes --no-cooling
+	@$(BINDIR_RESOLVE); mkdir -p "$$BINDIR"; $(GONEAT_RESOLVE); \
+		CUR=""; if [ -n "$$GONEAT" ]; then CUR="$$("$$GONEAT" --version 2>/dev/null | head -n1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"; fi; \
+		if [ "$(FORCE)" = "1" ] || [ "$(FORCE)" = "true" ] || [ "$$CUR" != "$(GONEAT_VERSION)" ]; then \
+			if [ -n "$$CUR" ] && [ "$$CUR" != "$(GONEAT_VERSION)" ]; then echo "-> goneat $$CUR != pinned $(GONEAT_VERSION); reinstalling..."; fi; \
+			rm -f "$$BINDIR/goneat" "$$BINDIR/goneat.exe"; \
+			echo "-> Installing goneat $(GONEAT_VERSION) into $$BINDIR..."; \
+			$(SFETCH_RESOLVE); $$SFETCH --repo fulmenhq/goneat --tag $(GONEAT_VERSION) --dest-dir "$$BINDIR"; \
+			OS_RAW="$$(uname -s 2>/dev/null || echo unknown)"; case "$$OS_RAW" in MINGW*|MSYS*|CYGWIN*) if [ -f "$$BINDIR/goneat.exe" ] && [ ! -f "$$BINDIR/goneat" ]; then mv "$$BINDIR/goneat.exe" "$$BINDIR/goneat"; fi ;; esac; \
+		else \
+			echo "-> goneat $(GONEAT_VERSION) already installed, skipping (use FORCE=1 to reinstall)"; \
+		fi; \
+		$(GONEAT_RESOLVE); echo "-> goneat: $$($$GONEAT --version 2>&1 | head -n1 || true)"; \
+		echo "-> Installing foundation tools via goneat doctor..."; \
+		$$GONEAT doctor tools --scope foundation --install --install-package-managers --yes --no-cooling
 	@echo "-> Installing Node.js dependencies..."
 	@if command -v bun >/dev/null 2>&1; then \
 		echo "-> Using bun..."; \
