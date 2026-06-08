@@ -22,7 +22,33 @@ scopes:
       - yq
       - bun
       - yamlfmt
+      - prettier
 tools:
+  prettier:
+    name: prettier
+    # NOTE: prettier is in the foundation scope because it is our ONLY Markdown
+    # formatter. biome is path/scope-limited to JS/TS/JSON and does not format
+    # Markdown. `goneat format --types markdown` shells out to prettier, so the
+    # CI quality-gate cannot pass without it provisioned during bootstrap.
+    description: Markdown formatter (foundation scope — our only Markdown formatter)
+    kind: node
+    detect_command: prettier --version
+    version_args:
+      - --version
+    installer_priority:
+      darwin:
+        - bun
+        - npm
+        - brew
+      linux:
+        - bun
+        - npm
+      windows:
+        - bun
+        - npm
+    version_scheme: semver
+    minimum_version: "3.0.0"
+    recommended_version: "3.8.0"
   actionlint:
     name: actionlint
     description: GitHub Actions workflow linter
