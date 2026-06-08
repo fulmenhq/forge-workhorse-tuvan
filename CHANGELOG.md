@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-08
+
+### Changed
+
+- Upgraded `commander` from `^14.0.3` to **`^15.0.0`**. This aligns tuvan's direct CLI dependency with the commander 15 that tsfulmen adopted in v0.3.0, removing the major-version split between the app's commander and the SDK's. Enabled now that the Node engine floor is `>=22.12.0` (commander 15 is ESM-only). tuvan's CLI surface is unchanged — verified by typecheck, the full vitest suite, biome, build, and a runtime smoke of `--help`/`version`/`doctor --json`.
+
 ## [0.1.4] - 2026-06-07
 
 ### Changed
