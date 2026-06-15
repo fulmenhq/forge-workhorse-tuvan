@@ -45,6 +45,39 @@ let embeddedGitCommit: string | null = null;
 let embeddedBuildDate: string | null = null;
 
 /**
+ * Build-time injected identity values.
+ *
+ * Single-file binaries produced by `bun build --compile` carry no on-disk
+ * VERSION file or `.fulmen/app.yaml`, so filesystem discovery returns null
+ * inside them. The build (scripts/build-all.ts) injects the values below via
+ * `bun build --define`, which replaces these identifiers with string literals
+ * at compile time. In non-compiled runs (tsx/node) the identifiers are
+ * undefined; the `typeof` guards yield null and on-disk discovery remains the
+ * source of truth. `typeof <undeclared>` is the one identifier reference that
+ * does not throw at runtime, so the guards are safe when nothing is injected.
+ */
+declare const __EMBEDDED_APP_YAML__: string | undefined;
+declare const __EMBEDDED_VERSION__: string | undefined;
+declare const __EMBEDDED_GIT_COMMIT__: string | undefined;
+declare const __EMBEDDED_BUILD_DATE__: string | undefined;
+
+function buildInjectedAppYaml(): string | null {
+  return typeof __EMBEDDED_APP_YAML__ !== "undefined" ? __EMBEDDED_APP_YAML__ : null;
+}
+
+function buildInjectedVersion(): string | null {
+  return typeof __EMBEDDED_VERSION__ !== "undefined" ? __EMBEDDED_VERSION__ : null;
+}
+
+function buildInjectedGitCommit(): string | null {
+  return typeof __EMBEDDED_GIT_COMMIT__ !== "undefined" ? __EMBEDDED_GIT_COMMIT__ : null;
+}
+
+function buildInjectedBuildDate(): string | null {
+  return typeof __EMBEDDED_BUILD_DATE__ !== "undefined" ? __EMBEDDED_BUILD_DATE__ : null;
+}
+
+/**
  * Try to read VERSION file from various locations relative to module
  */
 function discoverVersionFile(): string | null {
@@ -106,8 +139,9 @@ export async function initializeEmbeddedIdentity(): Promise<boolean> {
     return false;
   }
 
-  // Try to discover and register app.yaml
-  const appYaml = discoverAppYaml();
+  // Try to discover and register app.yaml. On disk in dev/node runs; injected at
+  // build time for compiled single-file binaries (where the file is not present).
+  const appYaml = discoverAppYaml() ?? buildInjectedAppYaml();
   if (appYaml) {
     try {
       await registerEmbeddedIdentity(appYaml);
@@ -118,8 +152,17 @@ export async function initializeEmbeddedIdentity(): Promise<boolean> {
     }
   }
 
-  // Cache version from VERSION file
-  embeddedVersion = discoverVersionFile();
+  // Cache version: prefer the on-disk VERSION file (dev/node), falling back to
+  // the build-time injected value (compiled binaries have no VERSION on disk).
+  embeddedVersion = discoverVersionFile() ?? buildInjectedVersion();
+
+  // Git commit and build date are only available via build-time injection.
+  if (!embeddedGitCommit) {
+    embeddedGitCommit = buildInjectedGitCommit();
+  }
+  if (!embeddedBuildDate) {
+    embeddedBuildDate = buildInjectedBuildDate();
+  }
 
   return hasEmbeddedIdentity();
 }
