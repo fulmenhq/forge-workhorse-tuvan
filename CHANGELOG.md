@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `release.yml`): it runs the binary's own `version` subcommand from outside the
   repo and asserts the output matches `VERSION`, catching startup crashes and
   unresolved/shadowed versions before release.
+- `version --extended` now reports the `@fulmenhq/tsfulmen` version inside
+  compiled binaries (injected at build time, since there is no `package.json` on
+  disk), and attributes `crucible` to the bundling tsfulmen (e.g. `via
+  @fulmenhq/tsfulmen 0.3.2`) when the app does not sync crucible SSOT directly,
+  instead of showing `unknown`.
 
 ### Changed
 
@@ -55,8 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they were unreleased internal iterations (and their compiled binaries were
   affected by the bugs fixed here). 0.1.7 is tagged from the current branch; no
   retroactive tags are created for 0.1.3–0.1.6.
-- Known minor: compiled `version --extended` reports `tsfulmen`/`crucible`
-  versions as `unknown` (those still read `package.json` from disk).
 
 ## [0.1.6] - 2026-06-08
 

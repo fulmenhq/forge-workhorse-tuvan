@@ -98,6 +98,16 @@ interface BuildInfo {
   appYaml: string;
   gitCommit: string;
   buildDate: string;
+  tsfulmenVersion: string;
+}
+
+function resolveTsfulmenVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync("node_modules/@fulmenhq/tsfulmen/package.json", "utf-8"));
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 function gitOrUnknown(args: string[]): string {
@@ -114,6 +124,7 @@ function gatherBuildInfo(): BuildInfo {
     appYaml: readFileSync(".fulmen/app.yaml", "utf-8"),
     gitCommit: gitOrUnknown(["rev-parse", "--short=8", "HEAD"]),
     buildDate: new Date().toISOString(),
+    tsfulmenVersion: resolveTsfulmenVersion(),
   };
 }
 
@@ -210,6 +221,8 @@ function main(): void {
     `__EMBEDDED_BUILD_DATE__=${JSON.stringify(info.buildDate)}`,
     "--define",
     `__EMBEDDED_APP_YAML__=${JSON.stringify(info.appYaml)}`,
+    "--define",
+    `__EMBEDDED_TSFULMEN_VERSION__=${JSON.stringify(info.tsfulmenVersion)}`,
   ];
 
   let succeeded = 0;

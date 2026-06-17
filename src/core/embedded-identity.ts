@@ -66,6 +66,20 @@ declare const __EMBEDDED_APP_YAML__: string | undefined;
 declare const __EMBEDDED_VERSION__: string | undefined;
 declare const __EMBEDDED_GIT_COMMIT__: string | undefined;
 declare const __EMBEDDED_BUILD_DATE__: string | undefined;
+declare const __EMBEDDED_TSFULMEN_VERSION__: string | undefined;
+
+/**
+ * Resolved @fulmenhq/tsfulmen version, injected at build time.
+ *
+ * In dev/node, version --extended reads this from package.json on disk; a
+ * compiled binary has no package.json, so the build injects the resolved
+ * version here for the extended-version output.
+ */
+export function getInjectedTsfulmenVersion(): string | null {
+  return typeof __EMBEDDED_TSFULMEN_VERSION__ !== "undefined"
+    ? __EMBEDDED_TSFULMEN_VERSION__
+    : null;
+}
 
 function buildInjectedAppYaml(): string | null {
   return typeof __EMBEDDED_APP_YAML__ !== "undefined" ? __EMBEDDED_APP_YAML__ : null;
