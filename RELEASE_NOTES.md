@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## v0.1.7 (2026-06-17): Working Compiled Binaries + De-Guardianed Hooks
+
+This release makes the cross-platform `bun --compile` release binaries actually
+work, and adds a release gate so they can't silently regress again.
+
+### Highlights
+
+- **Compiled binaries fixed.** The standalone single-file binaries previously
+  crashed at startup or ran the wrong CLI. Adopting `@fulmenhq/tsfulmen` v0.3.2
+  (with string-metrics-wasm 0.3.10 and compile-safe CLIs) plus build-time
+  identity/version embedding means each binary now starts cleanly and reports its
+  own version and identity.
+- **Release smoke test.** `build:all` (and the release workflow) now runs the
+  freshly built host binary's `version` subcommand and fails the build unless it
+  matches `VERSION` — catching startup crashes and version regressions before a
+  release ships.
+- **Hooks without guardian.** The goneat git hooks were regenerated without the
+  guardian browser-approval intercept, matching direct-push workflows.
+
+### Upgrading
+
+Template/CDRL consumers: re-run `make hooks-ensure` (or `goneat hooks generate &&
+goneat hooks install`) if you want the de-guardianed hooks, and rebuild binaries
+with `make build:all` to pick up the embedded-identity build step.
+
+### Note on 0.1.3–0.1.6
+
+Those versions appear in the CHANGELOG but were unreleased internal iterations
+and were never tagged; 0.1.7 is the next tagged release after 0.1.2.
+
 ## v0.1.2 (2026-02-06): Public Readiness — Licensing + Dependency Refresh
 
 A small housekeeping release preparing forge-workhorse-tuvan for public visibility.

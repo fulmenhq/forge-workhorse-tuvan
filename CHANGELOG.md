@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-17
+
+### Fixed
+
+- **Compiled release binaries were dead-on-arrival.** The `bun build --compile`
+  single-file binaries shipped by `release.yml` crashed at startup and/or ran the
+  wrong CLI. The root causes were upstream and are resolved by adopting
+  `@fulmenhq/tsfulmen` v0.3.2 (see Changed):
+  - `@3leaps/string-metrics-wasm` loaded its WASM eagerly via a top-level
+    `readFileSync(new URL())` that `--compile` does not embed → startup `ENOENT`.
+    Fixed upstream in 0.3.10 (base64-embedded WASM, lazy init).
+  - tsfulmen's bundled `tsfulmen-schema` CLI self-executed inside compiled
+    binaries (a main-module guard that is not compile-safe), hijacking the host
+    CLI. Fixed upstream in tsfulmen 0.3.2.
+- **Identity and version resolution inside compiled binaries.** A single-file
+  binary has no on-disk `VERSION` or `.fulmen/app.yaml`, and tsfulmen's schema
+  registry (used to validate identity) is filesystem-backed and absent in the
+  binary. Identity, version, git commit, and build date are now injected at build
+  time and resolved via a new `resolveIdentity()` fallback, so the binary reports
+  its real version and identity instead of `0.0.0-unknown` or failing to start.
+
+### Added
+
+- Build-time identity embedding in `scripts/build-all.ts`: version, git commit,
+  build date, and `.fulmen/app.yaml` are injected into every compiled binary via
+  `bun --define`.
+- A host-platform **release smoke test** in `build:all` (and therefore
+  `release.yml`): it runs the binary's own `version` subcommand from outside the
+  repo and asserts the output matches `VERSION`, catching startup crashes and
+  unresolved/shadowed versions before release.
+
+### Changed
+
+- Upgraded `@fulmenhq/tsfulmen` `0.3.0` → **`0.3.2`** (brings string-metrics-wasm
+  0.3.10 and compile-safe CLIs/bins). Added `yaml` as a direct dependency (already
+  present transitively) to parse the build-time injected identity.
+- Regenerated the goneat git hooks **without** the guardian browser-intercept
+  (`goneat hooks generate` without `--with-guardian`), suited to direct-push
+  workflows. Also picked up newer-template improvements (`set -f` glob guard,
+  `--staged-only` pre-commit) and removed an orphaned guardian comment goneat
+  leaves behind on regeneration.
+
+### Notes
+
+- Versions **0.1.3–0.1.6** appear above but were never git-tagged or released —
+  they were unreleased internal iterations (and their compiled binaries were
+  affected by the bugs fixed here). 0.1.7 is tagged from the current branch; no
+  retroactive tags are created for 0.1.3–0.1.6.
+- Known minor: compiled `version --extended` reports `tsfulmen`/`crucible`
+  versions as `unknown` (those still read `package.json` from disk).
+
 ## [0.1.6] - 2026-06-08
 
 ### Changed
@@ -122,7 +173,8 @@ All dev-only; no runtime dependency or public API change. Verified under TypeScr
 - Updated dependency on `@fulmenhq/tsfulmen` to v0.1.13 for full configuration support.
 - Refactored project structure to align with Fulmen Forge Workhorse Standard.
 
-[Unreleased]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.2...v0.1.7
 [0.1.2]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/fulmenhq/forge-workhorse-tuvan/releases/tag/v0.1.0
