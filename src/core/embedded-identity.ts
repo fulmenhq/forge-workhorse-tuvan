@@ -81,6 +81,18 @@ export function getInjectedTsfulmenVersion(): string | null {
     : null;
 }
 
+/**
+ * True when running as a `bun build --compile` standalone binary.
+ *
+ * build-all.ts injects __EMBEDDED_VERSION__ only when compiling a binary; in
+ * dev/node runs the identifier is undefined. Used to gate features that depend
+ * on filesystem SSOT assets not present in a single-file binary (e.g. the HTTP
+ * server's foundry catalogs).
+ */
+export function isCompiledBinary(): boolean {
+  return typeof __EMBEDDED_VERSION__ !== "undefined";
+}
+
 function buildInjectedAppYaml(): string | null {
   return typeof __EMBEDDED_APP_YAML__ !== "undefined" ? __EMBEDDED_APP_YAML__ : null;
 }

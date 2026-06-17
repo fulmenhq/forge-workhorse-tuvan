@@ -9,17 +9,28 @@ work, and adds a release gate so they can't silently regress again.
 
 ### Highlights
 
-- **Compiled binaries fixed.** The standalone single-file binaries previously
-  crashed at startup or ran the wrong CLI. Adopting `@fulmenhq/tsfulmen` v0.3.2
-  (with string-metrics-wasm 0.3.10 and compile-safe CLIs) plus build-time
-  identity/version embedding means each binary now starts cleanly and reports its
-  own version and identity.
+- **Compiled binaries fixed for CLI/diagnostic use.** The standalone single-file
+  binaries previously crashed at startup or ran the wrong CLI. Adopting
+  `@fulmenhq/tsfulmen` v0.3.2 (with string-metrics-wasm 0.3.10 and compile-safe
+  CLIs) plus build-time embedding of identity, version, and config assets means
+  each binary now starts cleanly and runs `version`, `health`, `doctor`, and
+  `envinfo` standalone. (The HTTP server is not yet supported in the binary —
+  see Scope below.)
 - **Release smoke test.** `build:all` (and the release workflow) now runs the
-  freshly built host binary's `version` subcommand and fails the build unless it
-  matches `VERSION` — catching startup crashes and version regressions before a
-  release ships.
+  freshly built host binary's `version`, `doctor --json`, and `serve` from
+  outside the repo and fails the build unless they behave correctly — catching
+  startup crashes, version regressions, and broken config loading.
 - **Hooks without guardian.** The goneat git hooks were regenerated without the
   guardian browser-approval intercept, matching direct-push workflows.
+
+### Scope: standalone binary vs. server
+
+The single-file binaries are CLI/diagnostic tools in this release. `serve` (the
+HTTP server) is not yet supported standalone — `@fulmenhq/tsfulmen` loads SSOT
+assets (foundry catalogs, schemas) from the filesystem that aren't present in a
+compiled binary. Run the server from a Node/npm install (`node dist/index.js
+serve`); in the binary, `serve` exits with a message pointing there. Full
+standalone server support is tracked upstream.
 
 ### Upgrading
 

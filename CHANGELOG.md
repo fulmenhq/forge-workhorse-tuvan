@@ -27,16 +27,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   binary. Identity, version, git commit, and build date are now injected at build
   time and resolved via a new `resolveIdentity()` fallback, so the binary reports
   its real version and identity instead of `0.0.0-unknown` or failing to start.
+- **Config-backed commands inside compiled binaries.** The config defaults and
+  schema were read from cwd-relative paths absent in a single-file binary. They
+  are now embedded at build time and materialized to a temp path at runtime;
+  schema validation is skipped in-binary (the embedded defaults are validated in
+  CI, and tuvan still enforces its own invariants). `doctor`/`envinfo` now load
+  config standalone.
+- **`health`/`doctor` are embedded-aware.** They no longer report a compiled
+  binary as unhealthy/misinstalled for missing on-disk `VERSION`/`.fulmen/app.yaml`/
+  `package.json`; they recognize the embedded identity/version and bundled tsfulmen.
+- **`--json` output is clean.** Config-bootstrap diagnostics now write to stderr,
+  so `doctor --json` / `envinfo --json` emit only JSON on stdout (pipeable to `jq`).
 
 ### Added
 
-- Build-time identity embedding in `scripts/build-all.ts`: version, git commit,
-  build date, and `.fulmen/app.yaml` are injected into every compiled binary via
-  `bun --define`.
+- Build-time embedding in `scripts/build-all.ts`: version, git commit, build
+  date, `.fulmen/app.yaml`, and the config defaults + schema are injected into
+  every compiled binary via `bun --define`.
 - A host-platform **release smoke test** in `build:all` (and therefore
-  `release.yml`): it runs the binary's own `version` subcommand from outside the
-  repo and asserts the output matches `VERSION`, catching startup crashes and
-  unresolved/shadowed versions before release.
+  `release.yml`): it runs the binary's `version`, `doctor --json`, and `serve`
+  from outside the repo and fails the build on a startup crash, an
+  unresolved/shadowed version, a config-load error, or a non-graceful `serve`.
 - `version --extended` now reports the `@fulmenhq/tsfulmen` version inside
   compiled binaries (injected at build time, since there is no `package.json` on
   disk), and attributes `crucible` to the bundling tsfulmen (e.g. `via
@@ -53,6 +64,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflows. Also picked up newer-template improvements (`set -f` glob guard,
   `--staged-only` pre-commit) and removed an orphaned guardian comment goneat
   leaves behind on regeneration.
+
+### Scope
+
+- The `bun --compile` standalone binaries are **CLI/diagnostic tools** in this
+  release (`version`, `health`, `doctor`, `envinfo`). The **HTTP server
+  (`serve`) is not yet supported in the standalone binary** — `@fulmenhq/tsfulmen`
+  loads SSOT assets (foundry catalogs, schemas) from the filesystem, absent in a
+  single-file binary. Run the server from a Node/npm install (`node dist/index.js
+  serve`); in the binary, `serve` exits with a clear message pointing there. Full
+  standalone server support is tracked upstream (tsfulmen compile-safe assets).
 
 ### Notes
 

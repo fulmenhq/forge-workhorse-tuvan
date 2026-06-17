@@ -99,7 +99,12 @@ interface BuildInfo {
   gitCommit: string;
   buildDate: string;
   tsfulmenVersion: string;
+  configDefaults: string;
+  configSchema: string;
 }
+
+const CONFIG_DEFAULTS_PATH = "config/tuvan/v1.0.0/tuvan-defaults.yaml";
+const CONFIG_SCHEMA_PATH = "schemas/tuvan/v1.0.0/config.schema.json";
 
 function resolveTsfulmenVersion(): string {
   try {
@@ -125,6 +130,8 @@ function gatherBuildInfo(): BuildInfo {
     gitCommit: gitOrUnknown(["rev-parse", "--short=8", "HEAD"]),
     buildDate: new Date().toISOString(),
     tsfulmenVersion: resolveTsfulmenVersion(),
+    configDefaults: readFileSync(CONFIG_DEFAULTS_PATH, "utf-8"),
+    configSchema: readFileSync(CONFIG_SCHEMA_PATH, "utf-8"),
   };
 }
 
@@ -167,29 +174,72 @@ function smokeTest(binaryName: string, info: BuildInfo): boolean {
     return false;
   }
 
+  // 1) `version` — identity/version resolution and that the binary starts and
+  //    runs its own CLI.
   process.stdout.write(`Smoke test: ${binaryName}-${suffix} version ... `);
   try {
     // Run outside the repo tree so on-disk VERSION/app.yaml can't mask a bad embed.
-    const out = execFileSync(binary, ["version"], {
-      encoding: "utf-8",
-      cwd: "/",
-    }).trim();
+    const out = execFileSync(binary, ["version"], { encoding: "utf-8", cwd: "/" }).trim();
     if (out !== info.version) {
       console.log("FAILED");
       console.error(`    expected version "${info.version}", got "${out}"`);
       return false;
     }
     console.log(`ok (${out})`);
-    return true;
   } catch (err: unknown) {
     console.log("FAILED");
-    const msg =
-      err instanceof Error
-        ? (err as { stderr?: Buffer }).stderr?.toString().trim() || err.message
-        : String(err);
-    console.error(`    ${msg}`);
+    console.error(`    ${smokeErr(err)}`);
     return false;
   }
+
+  // 2) `doctor --json` — a config-backed command: exercises the embedded config
+  //    defaults + schema and the diagnostic checks. Must exit 0 (no error-status
+  //    checks) and emit parseable JSON when run outside the repo.
+  process.stdout.write(`Smoke test: ${binaryName}-${suffix} doctor --json ... `);
+  try {
+    const out = execFileSync(binary, ["doctor", "--json"], { encoding: "utf-8", cwd: "/" });
+    const parsed = JSON.parse(out);
+    const errors = (parsed.results ?? []).filter((r: { status?: string }) => r.status === "error");
+    if (errors.length > 0) {
+      console.log("FAILED");
+      console.error(
+        `    doctor reported error checks: ${errors.map((e: { name?: string }) => e.name).join(", ")}`,
+      );
+      return false;
+    }
+    console.log("ok");
+  } catch (err: unknown) {
+    console.log("FAILED");
+    console.error(`    ${smokeErr(err)}`);
+    return false;
+  }
+
+  // 3) `serve` — the HTTP server isn't supported in the single-file binary yet
+  //    (tsfulmen foundry catalogs are filesystem-backed). It must fail *cleanly*
+  //    with the guidance message, not crash with a FoundryCatalogError.
+  process.stdout.write(`Smoke test: ${binaryName}-${suffix} serve (graceful refusal) ... `);
+  try {
+    execFileSync(binary, ["serve", "--port", "18080"], { encoding: "utf-8", cwd: "/" });
+    // serve must NOT start successfully in a compiled binary.
+    console.log("FAILED");
+    console.error("    serve unexpectedly started in the standalone binary");
+    return false;
+  } catch (err: unknown) {
+    const msg = smokeErr(err);
+    if (msg.includes("FoundryCatalogError") || !msg.includes("does not support the HTTP server")) {
+      console.log("FAILED");
+      console.error(`    serve did not refuse cleanly: ${msg.split("\n")[0]}`);
+      return false;
+    }
+    console.log("ok (clean refusal)");
+    return true;
+  }
+}
+
+function smokeErr(err: unknown): string {
+  return err instanceof Error
+    ? (err as { stderr?: Buffer }).stderr?.toString().trim() || err.message
+    : String(err);
 }
 
 function main(): void {
@@ -223,6 +273,10 @@ function main(): void {
     `__EMBEDDED_APP_YAML__=${JSON.stringify(info.appYaml)}`,
     "--define",
     `__EMBEDDED_TSFULMEN_VERSION__=${JSON.stringify(info.tsfulmenVersion)}`,
+    "--define",
+    `__EMBEDDED_CONFIG_DEFAULTS__=${JSON.stringify(info.configDefaults)}`,
+    "--define",
+    `__EMBEDDED_CONFIG_SCHEMA__=${JSON.stringify(info.configSchema)}`,
   ];
 
   let succeeded = 0;

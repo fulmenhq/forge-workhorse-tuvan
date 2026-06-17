@@ -13,24 +13,43 @@
  * aliases plus workhorse invariants.
  */
 
-import { resolve } from "node:path";
 import { loadConfig as tsfulmenLoadConfig } from "@fulmenhq/tsfulmen/config";
-import { createStructuredLogger } from "@fulmenhq/tsfulmen/logging";
+import {
+  createEnterpriseLogger,
+  type LogEvent,
+  type Logger,
+  type Sink,
+} from "@fulmenhq/tsfulmen/logging";
 import { resolveIdentity } from "../core/embedded-identity.js";
+import { resolveConfigAssetPaths } from "./embedded-config.js";
 import type { ConfigMetadata, ConfigWithMetadata, TuvanConfig } from "./types.js";
 import { ConfigInvalidError } from "./types.js";
 
 let cachedConfigWithMetadata: ConfigWithMetadata | null = null;
 
 // Logger for config operations (initialized on first use)
-let configLogger: ReturnType<typeof createStructuredLogger> | null = null;
+let configLogger: Logger | null = null;
+
+/**
+ * Sink that writes config-bootstrap diagnostics to stderr.
+ *
+ * tsfulmen's default ConsoleSink writes to stdout, which would corrupt the
+ * machine-readable output of `--json` CLI commands (e.g. `doctor --json`,
+ * `envinfo --json`) that load config. Config-load diagnostics are not program
+ * output, so they belong on stderr, keeping stdout reserved for JSON.
+ */
+class StderrSink implements Sink {
+  write(event: LogEvent): void {
+    process.stderr.write(`${JSON.stringify(event)}\n`);
+  }
+}
 
 /**
  * Get or create the config logger
  */
-function getLogger() {
+function getLogger(): Logger {
   if (!configLogger) {
-    configLogger = createStructuredLogger("tuvan.config");
+    configLogger = createEnterpriseLogger("tuvan.config", { sinks: [new StderrSink()] });
   }
   return configLogger;
 }
@@ -436,12 +455,33 @@ export async function loadConfig(): Promise<TuvanConfig> {
 
   const identity = await resolveIdentity();
 
-  const defaultsPath = resolve("config/tuvan/v1.0.0/tuvan-defaults.yaml");
-  const schemaPath = resolve("schemas/tuvan/v1.0.0/config.schema.json");
+  // Resolve config defaults + schema as real paths (on-disk in dev/installed
+  // runs; materialized from build-time embedded copies in compiled binaries,
+  // which carry no config/ or schemas/ directory on disk).
+  const assets = resolveConfigAssetPaths(
+    "config/tuvan/v1.0.0/tuvan-defaults.yaml",
+    "schemas/tuvan/v1.0.0/config.schema.json",
+  );
+  if (!assets) {
+    throw new ConfigInvalidError(
+      "Config defaults/schema not found on disk or embedded in the binary",
+    );
+  }
+  const { defaultsPath, schemaPath } = assets;
+
+  // Schema validation pulls in JSON-Schema metaschemas that tsfulmen loads from
+  // filesystem paths (e.g. schemas/crucible-ts/meta/draft-07/schema.json), which
+  // are absent in a compiled single-file binary. When running from embedded
+  // assets we skip schema validation: the embedded defaults are already validated
+  // in dev/CI, and tuvan still enforces its own invariants (control-plane safety,
+  // integer ranges) after load.
+  const effectiveSchemaPath = assets.embedded ? undefined : schemaPath;
 
   logger.debug("Loading configuration", {
     defaultsPath,
-    schemaPath,
+    schemaPath: effectiveSchemaPath,
+    embedded: assets.embedded,
+    schemaValidated: !assets.embedded,
     envPrefix: identity.app.env_prefix,
   });
 
@@ -453,7 +493,7 @@ export async function loadConfig(): Promise<TuvanConfig> {
         app: identity.app.binary_name,
       },
       defaultsPath,
-      schemaPath,
+      schemaPath: effectiveSchemaPath,
       envPrefix: identity.app.env_prefix.endsWith("_")
         ? identity.app.env_prefix.slice(0, -1)
         : identity.app.env_prefix,

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import { exitCodes } from "@fulmenhq/tsfulmen/foundry";
 import { Command } from "commander";
+import { getVersion } from "../../core/version.js";
 import { analyzeEnvVar, type EnvVarDescriptor } from "../utils/envvars.js";
 
 // Get __dirname equivalent in ESM
@@ -135,30 +136,28 @@ function checkNodeVersion(): DiagnosticResult {
  */
 function checkAppIdentityFile(identity: Identity): DiagnosticResult {
   const appYamlPath = join(__dirname, "..", "..", "..", ".fulmen", "app.yaml");
-
-  if (!existsSync(appYamlPath)) {
-    return {
-      name: "App Identity File",
-      status: "error",
-      message: ".fulmen/app.yaml not found",
-      suggestion: "Create .fulmen/app.yaml with app identity metadata",
-    };
-  }
-
+  const onDisk = existsSync(appYamlPath);
   const binaryName = identity.app.binary_name;
+
   if (!binaryName) {
     return {
-      name: "App Identity File",
+      name: "App Identity",
       status: "error",
-      message: "binary_name not found in .fulmen/app.yaml",
-      suggestion: "Add 'binary_name' field to .fulmen/app.yaml",
+      message: onDisk
+        ? "binary_name not found in .fulmen/app.yaml"
+        : "binary_name not found in embedded identity",
+      suggestion: "Add 'binary_name' to .fulmen/app.yaml",
     };
   }
 
+  // A compiled single-file binary has no .fulmen/app.yaml on disk; the identity
+  // is embedded at build time and was resolved successfully (binaryName set).
   return {
-    name: "App Identity File",
+    name: "App Identity",
     status: "ok",
-    message: `.fulmen/app.yaml exists and valid (binary: ${binaryName})`,
+    message: onDisk
+      ? `.fulmen/app.yaml exists and valid (binary: ${binaryName})`
+      : `identity resolved (binary: ${binaryName}, embedded)`,
   };
 }
 
@@ -169,20 +168,21 @@ function checkAppIdentityFile(identity: Identity): DiagnosticResult {
  */
 function checkVersionFile(): DiagnosticResult {
   const versionPath = join(__dirname, "..", "..", "..", "VERSION");
+  if (existsSync(versionPath)) {
+    return { name: "Version", status: "ok", message: "VERSION file exists" };
+  }
 
-  if (!existsSync(versionPath)) {
-    return {
-      name: "VERSION File",
-      status: "error",
-      message: "VERSION file not found at repository root",
-      suggestion: "Create VERSION file with semantic version (e.g., '0.1.0')",
-    };
+  // Compiled binary: no VERSION on disk; the version is embedded at build time.
+  const version = getVersion();
+  if (version && version !== "0.0.0-unknown") {
+    return { name: "Version", status: "ok", message: `version ${version} (embedded)` };
   }
 
   return {
-    name: "VERSION File",
-    status: "ok",
-    message: "VERSION file exists",
+    name: "Version",
+    status: "error",
+    message: "version could not be resolved (no VERSION file and no embedded version)",
+    suggestion: "Create a VERSION file, or build via `make build:all` to embed the version",
   };
 }
 
@@ -193,21 +193,16 @@ function checkVersionFile(): DiagnosticResult {
  */
 function checkTsfulmenInstallation(): DiagnosticResult {
   try {
+    // tsfulmen is statically imported throughout this binary, so reaching this
+    // code means it loaded. On disk (dev/installed) we confirm via package.json;
+    // a compiled binary has tsfulmen bundled in and no package.json on disk.
     const packagePath = join(__dirname, "..", "..", "..", "package.json");
-    if (!existsSync(packagePath)) {
-      return {
-        name: "tsfulmen Installation",
-        status: "error",
-        message: "package.json not found",
-        suggestion: "Run 'npm install' or 'bun install' to install dependencies",
-      };
-    }
-
-    // If we got this far, tsfulmen is available (we're using it)
     return {
       name: "tsfulmen Installation",
       status: "ok",
-      message: "@fulmenhq/tsfulmen is installed and available",
+      message: existsSync(packagePath)
+        ? "@fulmenhq/tsfulmen is installed and available"
+        : "@fulmenhq/tsfulmen is bundled and available",
     };
   } catch (_error) {
     return {
