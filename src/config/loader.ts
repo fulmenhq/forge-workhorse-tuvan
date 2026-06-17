@@ -14,9 +14,9 @@
  */
 
 import { resolve } from "node:path";
-import { loadIdentity } from "@fulmenhq/tsfulmen/appidentity";
 import { loadConfig as tsfulmenLoadConfig } from "@fulmenhq/tsfulmen/config";
 import { createStructuredLogger } from "@fulmenhq/tsfulmen/logging";
+import { resolveIdentity } from "../core/embedded-identity.js";
 import type { ConfigMetadata, ConfigWithMetadata, TuvanConfig } from "./types.js";
 import { ConfigInvalidError } from "./types.js";
 
@@ -434,7 +434,7 @@ export async function loadConfig(): Promise<TuvanConfig> {
     return cachedConfigWithMetadata.config;
   }
 
-  const identity = await loadIdentity();
+  const identity = await resolveIdentity();
 
   const defaultsPath = resolve("config/tuvan/v1.0.0/tuvan-defaults.yaml");
   const schemaPath = resolve("schemas/tuvan/v1.0.0/config.schema.json");

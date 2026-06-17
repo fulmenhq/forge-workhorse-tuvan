@@ -19,7 +19,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hasEmbeddedIdentity, registerEmbeddedIdentity } from "@fulmenhq/tsfulmen/appidentity";
+import {
+  hasEmbeddedIdentity,
+  type Identity,
+  loadIdentity,
+  registerEmbeddedIdentity,
+} from "@fulmenhq/tsfulmen/appidentity";
+import { parse as parseYaml } from "yaml";
 
 // Get directory of this module (works in dist/ after build)
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +69,27 @@ declare const __EMBEDDED_BUILD_DATE__: string | undefined;
 
 function buildInjectedAppYaml(): string | null {
   return typeof __EMBEDDED_APP_YAML__ !== "undefined" ? __EMBEDDED_APP_YAML__ : null;
+}
+
+/**
+ * Parse the build-time injected app.yaml into an Identity, or null if nothing
+ * was injected (non-compiled runs). Used as the compiled-binary fallback in
+ * resolveIdentity(): a single-file binary has no .fulmen/app.yaml on disk, and
+ * tsfulmen's schema registry (which validates registered/loaded identities) is
+ * itself filesystem-backed and unavailable inside the binary — so we hand the
+ * already-known identity straight to loadIdentity({ identity }), which returns
+ * it without filesystem discovery or schema validation.
+ */
+function buildInjectedIdentity(): Identity | null {
+  const yaml = buildInjectedAppYaml();
+  if (!yaml) {
+    return null;
+  }
+  try {
+    return parseYaml(yaml) as Identity;
+  } catch {
+    return null;
+  }
 }
 
 function buildInjectedVersion(): string | null {
@@ -139,9 +166,12 @@ export async function initializeEmbeddedIdentity(): Promise<boolean> {
     return false;
   }
 
-  // Try to discover and register app.yaml. On disk in dev/node runs; injected at
-  // build time for compiled single-file binaries (where the file is not present).
-  const appYaml = discoverAppYaml() ?? buildInjectedAppYaml();
+  // Register the on-disk app.yaml when present (dev/node runs). We deliberately
+  // do NOT register the build-time injected identity here: registerEmbeddedIdentity
+  // validates against tsfulmen's schema registry, which is filesystem-backed and
+  // absent in a compiled single-file binary (it throws "Schema not found"). The
+  // compiled-binary path is handled by resolveIdentity() instead.
+  const appYaml = discoverAppYaml();
   if (appYaml) {
     try {
       await registerEmbeddedIdentity(appYaml);
@@ -165,6 +195,39 @@ export async function initializeEmbeddedIdentity(): Promise<boolean> {
   }
 
   return hasEmbeddedIdentity();
+}
+
+let cachedIdentity: Identity | null = null;
+
+/**
+ * Resolve the application identity, working in every runtime context.
+ *
+ * - dev/node (app.yaml on disk): defers to tsfulmen's loadIdentity(), which
+ *   discovers and schema-validates the file.
+ * - compiled single-file binary (no app.yaml on disk, schema registry absent):
+ *   loadIdentity() throws, so we fall back to the build-time injected identity
+ *   and hand it to loadIdentity({ identity }), which returns it directly without
+ *   filesystem discovery or schema validation.
+ *
+ * Result is memoized so repeated calls (CLI startup + config loader) are cheap
+ * and consistent. Call sites should use this instead of loadIdentity() directly
+ * so the compiled-binary path is covered.
+ */
+export async function resolveIdentity(): Promise<Identity> {
+  if (cachedIdentity) {
+    return cachedIdentity;
+  }
+  try {
+    cachedIdentity = await loadIdentity();
+    return cachedIdentity;
+  } catch (error) {
+    const injected = buildInjectedIdentity();
+    if (injected) {
+      cachedIdentity = await loadIdentity({ identity: injected });
+      return cachedIdentity;
+    }
+    throw error;
+  }
 }
 
 /**
