@@ -16,7 +16,7 @@
  *   bun scripts/build-all.ts
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -161,7 +161,7 @@ function hostTargetSuffix(): string | null {
  * Run from a temp dir so it can't accidentally pick up the repo's on-disk
  * VERSION/app.yaml and mask a broken embed.
  */
-function smokeTest(binaryName: string, info: BuildInfo): boolean {
+async function smokeTest(binaryName: string, info: BuildInfo): Promise<boolean> {
   const suffix = hostTargetSuffix();
   if (!suffix) {
     console.log(`Smoke test: skipped (host ${process.platform}/${process.arch} is not a target)`);
@@ -217,31 +217,100 @@ function smokeTest(binaryName: string, info: BuildInfo): boolean {
   // 3) `serve` — the HTTP server must actually start and bind in the single-file
   //    binary now that tsfulmen >= 0.4.0 resolves its foundry catalogs (signals)
   //    and the rest of the SSOT assets from build-embedded copies. serve runs
-  //    until terminated, so launch it with a timeout and assert it reached the
-  //    "listening" state (data + control plane bound) before we kill it. Run
-  //    from a temp cwd so it can't pick up the repo's on-disk config/schema.
+  //    until terminated, so we spawn it, wait for its own "Server listening on"
+  //    line, then kill the whole process group (see serveBinds). Run from a temp
+  //    cwd so it can't pick up the repo's on-disk config/schema.
   process.stdout.write(`Smoke test: ${binaryName}-${suffix} serve (binds) ... `);
-  try {
-    execFileSync(binary, ["serve", "--port", "18080", "--control-port", "18081"], {
-      encoding: "utf-8",
-      cwd: "/",
-      timeout: 4000,
-    });
-    // serve should run until terminated; a clean self-exit means it never bound.
-    console.log("FAILED");
-    console.error("    serve exited on its own without binding");
-    return false;
-  } catch (err: unknown) {
-    const e = err as { stdout?: Buffer | string; stderr?: Buffer | string };
-    const out = `${e.stdout?.toString() ?? ""}${e.stderr?.toString() ?? ""}`;
-    if (out.includes("Server listening")) {
-      console.log("ok (bound, terminated)");
-      return true;
-    }
-    console.log("FAILED");
-    console.error(`    serve did not bind: ${smokeErr(err).split("\n")[0]}`);
-    return false;
+  const serveResult = await serveBinds(binary);
+  if (serveResult.ok) {
+    console.log("ok (bound, terminated)");
+    return true;
   }
+  console.log("FAILED");
+  console.error(`    ${serveResult.reason}`);
+  return false;
+}
+
+interface ServeBindsResult {
+  ok: boolean;
+  reason: string;
+}
+
+/**
+ * Spawn the compiled `serve`, confirm it reaches its own "Server listening on"
+ * line (data + control plane bound), then terminate the whole process group.
+ *
+ * Robustness notes:
+ * - Matches the app's own `[<binary>] Server listening on http://...` line, not
+ *   Fastify's per-server `Server listening at` log — the latter is emitted by
+ *   the data plane before the control plane binds, so matching it would
+ *   false-positive on a partial bind.
+ * - Spawns detached and SIGKILLs the process group on the way out, so a hung
+ *   graceful shutdown can never leave a listener holding the port and break the
+ *   next run with EADDRINUSE.
+ * - Surfaces an early exit / EADDRINUSE as a clear failure reason.
+ */
+function serveBinds(binary: string): Promise<ServeBindsResult> {
+  return new Promise<ServeBindsResult>((resolve) => {
+    const child = spawn(binary, ["serve", "--port", "18080", "--control-port", "18081"], {
+      cwd: "/",
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let out = "";
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      if (child.pid !== undefined) {
+        // Kill the whole process group; fall back to the bare pid if needed.
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            /* already exited */
+          }
+        }
+      }
+    };
+
+    const finish = (result: ServeBindsResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const onData = (chunk: Buffer) => {
+      out += chunk.toString();
+      if (out.includes("Server listening on http")) {
+        finish({ ok: true, reason: "" });
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+
+    child.on("error", (err) => {
+      finish({ ok: false, reason: `serve failed to spawn: ${err.message}` });
+    });
+    child.on("exit", (code, signal) => {
+      // Exiting before we saw the listening line means it never bound.
+      const tail = out.split("\n").filter(Boolean).slice(-1)[0] ?? "";
+      const hint = /EADDRINUSE|in use/i.test(out) ? " (port already in use)" : "";
+      finish({
+        ok: false,
+        reason: `serve exited before binding (code=${code}, signal=${signal})${hint}: ${tail}`,
+      });
+    });
+
+    timer = setTimeout(() => {
+      finish({ ok: false, reason: "serve did not report listening within 8s" });
+    }, 8000);
+  });
 }
 
 function smokeErr(err: unknown): string {
@@ -250,7 +319,7 @@ function smokeErr(err: unknown): string {
     : String(err);
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const binaryName = getBinaryName();
   const info = gatherBuildInfo();
 
@@ -334,10 +403,13 @@ function main(): void {
 
   // Gate: the host-platform binary must actually run and report its version.
   console.log();
-  if (!smokeTest(binaryName, info)) {
+  if (!(await smokeTest(binaryName, info))) {
     console.error("Release binaries failed the smoke test — see above.");
     process.exit(1);
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
