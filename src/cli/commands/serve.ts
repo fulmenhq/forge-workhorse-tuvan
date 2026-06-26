@@ -5,10 +5,9 @@
  */
 
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
-import { createSignalManager, exitCodes, onReload, onShutdown } from "@fulmenhq/tsfulmen/foundry";
+import { createSignalManager, onReload, onShutdown } from "@fulmenhq/tsfulmen/foundry";
 import { Command } from "commander";
 import type { FastifyInstance } from "fastify";
-import { isCompiledBinary } from "../../core/embedded-identity.js";
 
 /**
  * Server configuration options (CLI flags)
@@ -70,23 +69,6 @@ export function createServeCommand(identity: Identity): Command {
       `Control plane base path (env: ${envPrefix}ADMIN_BASE_PATH, default: /control)`,
     )
     .action(async (options: ServeOptions) => {
-      // The HTTP server depends on tsfulmen foundry catalogs (e.g. signals) that
-      // are loaded from the filesystem and are not present in a `bun --compile`
-      // single-file binary. Until tsfulmen ships compile-safe SSOT assets, the
-      // standalone binary supports CLI/diagnostic commands only; the server runs
-      // from a Node/npm install where those assets are on disk. Fail clearly here
-      // rather than crashing partway through startup with a FoundryCatalogError.
-      if (isCompiledBinary()) {
-        console.error(
-          `[${binaryName}] The standalone binary does not support the HTTP server yet — ` +
-            `it provides CLI/diagnostic commands (version, health, doctor, envinfo).\n` +
-            `Run '${binaryName} serve' from a Node/npm install instead ` +
-            `(e.g. 'node dist/index.js serve').\n` +
-            `Standalone 'serve' is pending compile-safe SSOT assets in @fulmenhq/tsfulmen.`,
-        );
-        process.exit(exitCodes.EXIT_FAILURE);
-      }
-
       try {
         // Load config from three layers (defaults → user → env)
         const { loadConfig, applyCliOverrides } = await import("../../config/loader.js");

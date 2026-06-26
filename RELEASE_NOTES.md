@@ -2,41 +2,35 @@
 
 ## [Unreleased]
 
-## v0.1.7 (2026-06-17): Working Compiled Binaries + De-Guardianed Hooks
+## v0.1.7 (2026-06-26): Full Standalone Compiled Binaries + De-Guardianed Hooks
 
-This release makes the cross-platform `bun --compile` release binaries actually
-work, and adds a release gate so they can't silently regress again.
+This release makes the cross-platform `bun --compile` release binaries work as
+**full standalone artifacts** — server included — and adds a release gate so they
+can't silently regress again.
 
 ### Highlights
 
-- **Compiled binaries fixed for CLI/diagnostic use.** The standalone single-file
-  binaries previously crashed at startup or ran the wrong CLI. Adopting
-  `@fulmenhq/tsfulmen` v0.3.2 (with string-metrics-wasm 0.3.10 and compile-safe
-  CLIs) plus build-time embedding of identity, version, and config assets means
-  each binary now starts cleanly and runs `version`, `health`, `doctor`, and
-  `envinfo` standalone. (The HTTP server is not yet supported in the binary —
-  see Scope below.)
-- **Release smoke test.** `build:all` (and the release workflow) now runs the
-  freshly built host binary's `version`, `doctor --json`, and `serve` from
-  outside the repo and fails the build unless they behave correctly — catching
-  startup crashes, version regressions, and broken config loading.
+- **Full standalone single-file binaries.** Building on `@fulmenhq/tsfulmen`
+  **v0.4.0** (compile-safe SSOT asset embedding), each binary starts cleanly,
+  reports its own version/identity, and runs every command — `version`, `health`,
+  `doctor`, `envinfo`, **and `serve`** — from anywhere, not just a repo checkout.
+- **Real config validation in the binary.** Configuration is schema-validated
+  inside the compiled binary, so invalid config is rejected (e.g.
+  `TUVAN_SERVER_PORT=abc tuvan doctor --json` now fails and exits non-zero
+  instead of silently passing).
+- **Release smoke test asserts the server binds.** `build:all` (and the release
+  workflow) runs the freshly built host binary's `version`, `doctor --json`, and
+  `serve` from outside the repo and fails the build unless they behave correctly —
+  the `serve` check now confirms the server actually binds.
 - **Hooks without guardian.** The goneat git hooks were regenerated without the
   guardian browser-approval intercept, matching direct-push workflows.
-
-### Scope: standalone binary vs. server
-
-The single-file binaries are CLI/diagnostic tools in this release. `serve` (the
-HTTP server) is not yet supported standalone — `@fulmenhq/tsfulmen` loads SSOT
-assets (foundry catalogs, schemas) from the filesystem that aren't present in a
-compiled binary. Run the server from a Node/npm install (`node dist/index.js
-serve`); in the binary, `serve` exits with a message pointing there. Full
-standalone server support is tracked upstream.
 
 ### Upgrading
 
 Template/CDRL consumers: re-run `make hooks-ensure` (or `goneat hooks generate &&
 goneat hooks install`) if you want the de-guardianed hooks, and rebuild binaries
-with `make build:all` to pick up the embedded-identity build step.
+with `make build:all` — they now embed identity, version, and config assets and
+run the server standalone.
 
 ### Note on 0.1.3–0.1.6
 

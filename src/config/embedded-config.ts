@@ -1,21 +1,23 @@
 /**
  * Embedded config assets
  *
- * tsfulmen's loadConfig() reads its defaults + schema from filesystem PATHS, not
- * inline content. A compiled single-file binary (`bun build --compile`) carries
- * no `config/` or `schemas/` directory on disk, so the usual cwd-relative paths
- * resolve to files that do not exist and config load fails (ENOENT).
+ * A compiled single-file binary (`bun build --compile`) carries no `config/` or
+ * `schemas/` directory on disk, so tuvan's own defaults + schema cannot be read
+ * from cwd-relative paths there. The build (scripts/build-all.ts) embeds the
+ * defaults YAML and schema JSON via `bun --define`.
  *
- * The build (scripts/build-all.ts) embeds the defaults YAML and schema JSON via
- * `bun --define`. At runtime, when the on-disk assets are absent, we materialize
- * the embedded copies to a temp directory once and hand those real paths to
- * loadConfig(). In dev/node runs the identifiers are undefined and on-disk assets
- * are used as before.
+ * tsfulmen >= 0.3.3 accepts inline config sources — a pre-parsed `defaults`
+ * object and an inline `schema` string — so we hand the embedded content
+ * straight to `loadConfig()` without the temp-file dance. tsfulmen >= 0.4.0
+ * resolves its JSON-Schema metaschemas from build-embedded assets, so schema
+ * validation works inside the binary too (no more skip-validation workaround).
+ *
+ * In dev/node runs the identifiers are undefined and on-disk assets are used.
  */
 
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 declare const __EMBEDDED_CONFIG_DEFAULTS__: string | undefined;
 declare const __EMBEDDED_CONFIG_SCHEMA__: string | undefined;
@@ -28,39 +30,34 @@ function injectedConfigSchema(): string | null {
   return typeof __EMBEDDED_CONFIG_SCHEMA__ !== "undefined" ? __EMBEDDED_CONFIG_SCHEMA__ : null;
 }
 
-export interface ConfigAssetPaths {
-  defaultsPath: string;
-  schemaPath: string;
-  /** True when the paths point at temp files materialized from embedded content. */
-  embedded: boolean;
-}
-
-let materialized: ConfigAssetPaths | null = null;
+/**
+ * Resolved config source for tsfulmen's `loadConfig()`.
+ *
+ * - `path`: on-disk defaults + schema files (dev/node runs from the repo).
+ * - `inline`: build-embedded defaults (pre-parsed) + schema string (compiled
+ *   single-file binaries, where the assets are not on disk).
+ *
+ * Both forms drive full schema validation; the binary no longer skips it.
+ */
+export type ConfigSource =
+  | { kind: "path"; defaultsPath: string; schemaPath: string }
+  | { kind: "inline"; defaults: Record<string, unknown>; schema: string };
 
 /**
- * Resolve the config defaults + schema to real filesystem paths that
- * tsfulmen's loadConfig() can read.
+ * Resolve tuvan's config defaults + schema to a source `loadConfig()` accepts.
  *
  * Precedence:
  * 1. On-disk assets (cwd-relative) when present — dev/node runs from the repo.
- * 2. Build-time embedded copies, materialized to a temp dir once (compiled
- *    single-file binaries, where the assets are not on disk).
+ * 2. Build-time embedded copies, passed inline (compiled single-file binaries).
  *
- * @returns the resolved paths, or null if neither on-disk nor embedded assets
+ * @returns the resolved source, or null if neither on-disk nor embedded assets
  *          are available.
  */
-export function resolveConfigAssetPaths(
-  defaultsRel: string,
-  schemaRel: string,
-): ConfigAssetPaths | null {
+export function resolveConfigSource(defaultsRel: string, schemaRel: string): ConfigSource | null {
   const onDiskDefaults = resolve(defaultsRel);
   const onDiskSchema = resolve(schemaRel);
   if (existsSync(onDiskDefaults) && existsSync(onDiskSchema)) {
-    return { defaultsPath: onDiskDefaults, schemaPath: onDiskSchema, embedded: false };
-  }
-
-  if (materialized) {
-    return materialized;
+    return { kind: "path", defaultsPath: onDiskDefaults, schemaPath: onDiskSchema };
   }
 
   const defaults = injectedConfigDefaults();
@@ -69,11 +66,5 @@ export function resolveConfigAssetPaths(
     return null;
   }
 
-  const dir = mkdtempSync(join(tmpdir(), "tuvan-config-"));
-  const defaultsPath = join(dir, "tuvan-defaults.yaml");
-  const schemaPath = join(dir, "config.schema.json");
-  writeFileSync(defaultsPath, defaults, "utf-8");
-  writeFileSync(schemaPath, schema, "utf-8");
-  materialized = { defaultsPath, schemaPath, embedded: true };
-  return materialized;
+  return { kind: "inline", defaults: parseYaml(defaults) as Record<string, unknown>, schema };
 }

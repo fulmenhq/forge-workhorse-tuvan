@@ -214,25 +214,33 @@ function smokeTest(binaryName: string, info: BuildInfo): boolean {
     return false;
   }
 
-  // 3) `serve` — the HTTP server isn't supported in the single-file binary yet
-  //    (tsfulmen foundry catalogs are filesystem-backed). It must fail *cleanly*
-  //    with the guidance message, not crash with a FoundryCatalogError.
-  process.stdout.write(`Smoke test: ${binaryName}-${suffix} serve (graceful refusal) ... `);
+  // 3) `serve` — the HTTP server must actually start and bind in the single-file
+  //    binary now that tsfulmen >= 0.4.0 resolves its foundry catalogs (signals)
+  //    and the rest of the SSOT assets from build-embedded copies. serve runs
+  //    until terminated, so launch it with a timeout and assert it reached the
+  //    "listening" state (data + control plane bound) before we kill it. Run
+  //    from a temp cwd so it can't pick up the repo's on-disk config/schema.
+  process.stdout.write(`Smoke test: ${binaryName}-${suffix} serve (binds) ... `);
   try {
-    execFileSync(binary, ["serve", "--port", "18080"], { encoding: "utf-8", cwd: "/" });
-    // serve must NOT start successfully in a compiled binary.
+    execFileSync(binary, ["serve", "--port", "18080", "--control-port", "18081"], {
+      encoding: "utf-8",
+      cwd: "/",
+      timeout: 4000,
+    });
+    // serve should run until terminated; a clean self-exit means it never bound.
     console.log("FAILED");
-    console.error("    serve unexpectedly started in the standalone binary");
+    console.error("    serve exited on its own without binding");
     return false;
   } catch (err: unknown) {
-    const msg = smokeErr(err);
-    if (msg.includes("FoundryCatalogError") || !msg.includes("does not support the HTTP server")) {
-      console.log("FAILED");
-      console.error(`    serve did not refuse cleanly: ${msg.split("\n")[0]}`);
-      return false;
+    const e = err as { stdout?: Buffer | string; stderr?: Buffer | string };
+    const out = `${e.stdout?.toString() ?? ""}${e.stderr?.toString() ?? ""}`;
+    if (out.includes("Server listening")) {
+      console.log("ok (bound, terminated)");
+      return true;
     }
-    console.log("ok (clean refusal)");
-    return true;
+    console.log("FAILED");
+    console.error(`    serve did not bind: ${smokeErr(err).split("\n")[0]}`);
+    return false;
   }
 }
 

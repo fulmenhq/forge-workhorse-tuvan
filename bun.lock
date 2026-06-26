@@ -9,7 +9,7 @@
         "@fastify/helmet": "^13.0.2",
         "@fastify/swagger": "^9.6.1",
         "@fastify/swagger-ui": "^5.2.5",
-        "@fulmenhq/tsfulmen": "0.3.2",
+        "@fulmenhq/tsfulmen": "0.4.0",
         "@sinclair/typebox": "^0.34.48",
         "commander": "^15.0.0",
         "fastify": "^5.7.4",
@@ -145,7 +145,7 @@
 
     "@fastify/swagger-ui": ["@fastify/swagger-ui@5.2.6", "", { "dependencies": { "@fastify/static": "^9.1.2", "fastify-plugin": "^5.0.0", "openapi-types": "^12.1.3", "rfdc": "^1.3.1", "yaml": "^2.4.1" } }, "sha512-OMnms0O5s9wb6wis/K5nlrAMLsgUbr1GA8uphM41IasWe3AFdgxz6r/3bA9HTxlDNUYc2FGGKeqMp3ntxmSiNA=="],
 
-    "@fulmenhq/tsfulmen": ["@fulmenhq/tsfulmen@0.3.2", "", { "dependencies": { "@3leaps/string-metrics-wasm": "0.3.10", "ajv": "^8.20.0", "ajv-draft-04": "^1.0.0", "ajv-formats": "^3.0.1", "archiver": "^8.0.0", "commander": "^15.0.0", "fast-glob": "^3.3.3", "hash-wasm": "^4.12.0", "picomatch": "^4.0.4", "pino": "^10.3.1", "tar-stream": "^3.2.0", "unzipper": "^0.12.3", "yaml": "^2.9.0" }, "peerDependencies": { "@types/express": "^4.17.0 || ^5.0.0", "fastify": "^4.0.0 || ^5.0.0" }, "optionalPeers": ["@types/express", "fastify"], "bin": { "tsfulmen-prometheus": "dist/bin/prometheus-cli.js", "tsfulmen-schema": "dist/bin/schema-cli.js", "tsfulmen-signals": "dist/bin/signals-cli.js" } }, "sha512-i6DnSpjqoOF6pk9Q03fa8BbsmJPqfikM3j+K4C3GOYGhPC6qZYamTPRbDpWfxXB5qG563kSul8rQuRg7YFPdTw=="],
+    "@fulmenhq/tsfulmen": ["@fulmenhq/tsfulmen@0.4.0", "", { "dependencies": { "@3leaps/string-metrics-wasm": "0.3.10", "ajv": "^8.20.0", "ajv-draft-04": "^1.0.0", "ajv-formats": "^3.0.1", "archiver": "^8.0.0", "commander": "^15.0.0", "fast-glob": "^3.3.3", "hash-wasm": "^4.12.0", "picomatch": "^4.0.4", "pino": "^10.3.1", "tar-stream": "^3.2.0", "unzipper": "^0.12.3", "yaml": "^2.9.0" }, "peerDependencies": { "@types/express": "^4.17.0 || ^5.0.0", "fastify": "^4.0.0 || ^5.0.0" }, "optionalPeers": ["@types/express", "fastify"], "bin": { "tsfulmen-prometheus": "dist/bin/prometheus-cli.js", "tsfulmen-schema": "dist/bin/schema-cli.js", "tsfulmen-signals": "dist/bin/signals-cli.js" } }, "sha512-xGw6G/gdK81P43e3seDrNhNM0gXGMoqMOtA0mlVc1sy8Vd1SMS4c4Tb1/Zkv5LZRVu0woHVw2Y2q3ACVm3uzAQ=="],
 
     "@jridgewell/resolve-uri": ["@jridgewell/resolve-uri@3.1.2", "", {}, "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw=="],
 

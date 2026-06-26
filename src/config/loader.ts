@@ -21,7 +21,7 @@ import {
   type Sink,
 } from "@fulmenhq/tsfulmen/logging";
 import { resolveIdentity } from "../core/embedded-identity.js";
-import { resolveConfigAssetPaths } from "./embedded-config.js";
+import { resolveConfigSource } from "./embedded-config.js";
 import type { ConfigMetadata, ConfigWithMetadata, TuvanConfig } from "./types.js";
 import { ConfigInvalidError } from "./types.js";
 
@@ -455,49 +455,52 @@ export async function loadConfig(): Promise<TuvanConfig> {
 
   const identity = await resolveIdentity();
 
-  // Resolve config defaults + schema as real paths (on-disk in dev/installed
-  // runs; materialized from build-time embedded copies in compiled binaries,
-  // which carry no config/ or schemas/ directory on disk).
-  const assets = resolveConfigAssetPaths(
+  // Resolve config defaults + schema as a source tsfulmen's loadConfig() accepts:
+  // on-disk paths in dev/installed runs, or build-embedded inline content in
+  // compiled single-file binaries (which carry no config/ or schemas/ directory
+  // on disk). Both forms drive full schema validation — tsfulmen >= 0.4.0
+  // resolves its metaschemas from embedded assets, so the binary validates too.
+  const source = resolveConfigSource(
     "config/tuvan/v1.0.0/tuvan-defaults.yaml",
     "schemas/tuvan/v1.0.0/config.schema.json",
   );
-  if (!assets) {
+  if (!source) {
     throw new ConfigInvalidError(
       "Config defaults/schema not found on disk or embedded in the binary",
     );
   }
-  const { defaultsPath, schemaPath } = assets;
 
-  // Schema validation pulls in JSON-Schema metaschemas that tsfulmen loads from
-  // filesystem paths (e.g. schemas/crucible-ts/meta/draft-07/schema.json), which
-  // are absent in a compiled single-file binary. When running from embedded
-  // assets we skip schema validation: the embedded defaults are already validated
-  // in dev/CI, and tuvan still enforces its own invariants (control-plane safety,
-  // integer ranges) after load.
-  const effectiveSchemaPath = assets.embedded ? undefined : schemaPath;
+  const appIdentifier = {
+    vendor: identity.app.vendor,
+    app: identity.app.binary_name,
+  };
+  const envPrefix = identity.app.env_prefix.endsWith("_")
+    ? identity.app.env_prefix.slice(0, -1)
+    : identity.app.env_prefix;
 
   logger.debug("Loading configuration", {
-    defaultsPath,
-    schemaPath: effectiveSchemaPath,
-    embedded: assets.embedded,
-    schemaValidated: !assets.embedded,
+    source: source.kind,
     envPrefix: identity.app.env_prefix,
   });
 
   try {
-    // Load via tsfulmen (handles layers 1, 2, 3 and validation)
-    const result = await tsfulmenLoadConfig<TuvanConfig>({
-      identity: {
-        vendor: identity.app.vendor,
-        app: identity.app.binary_name,
-      },
-      defaultsPath,
-      schemaPath: effectiveSchemaPath,
-      envPrefix: identity.app.env_prefix.endsWith("_")
-        ? identity.app.env_prefix.slice(0, -1)
-        : identity.app.env_prefix,
-    });
+    // Load via tsfulmen (handles layers 1, 2, 3 and schema validation). The two
+    // source shapes (path-based / inline) are distinct loadConfig overloads, so
+    // dispatch explicitly rather than building a union options object.
+    const result =
+      source.kind === "path"
+        ? await tsfulmenLoadConfig<TuvanConfig>({
+            identity: appIdentifier,
+            defaultsPath: source.defaultsPath,
+            schemaPath: source.schemaPath,
+            envPrefix,
+          })
+        : await tsfulmenLoadConfig<TuvanConfig>({
+            identity: appIdentifier,
+            defaults: source.defaults,
+            schema: source.schema,
+            envPrefix,
+          });
 
     // Build metadata for introspection
     const metadata: ConfigMetadata = {

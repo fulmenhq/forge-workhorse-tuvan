@@ -7,37 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.7] - 2026-06-17
+## [0.1.7] - 2026-06-26
 
 ### Fixed
 
-- **Compiled release binaries were dead-on-arrival.** The `bun build --compile`
-  single-file binaries shipped by `release.yml` crashed at startup and/or ran the
-  wrong CLI. The root causes were upstream and are resolved by adopting
-  `@fulmenhq/tsfulmen` v0.3.2 (see Changed):
-  - `@3leaps/string-metrics-wasm` loaded its WASM eagerly via a top-level
-    `readFileSync(new URL())` that `--compile` does not embed → startup `ENOENT`.
-    Fixed upstream in 0.3.10 (base64-embedded WASM, lazy init).
-  - tsfulmen's bundled `tsfulmen-schema` CLI self-executed inside compiled
-    binaries (a main-module guard that is not compile-safe), hijacking the host
-    CLI. Fixed upstream in tsfulmen 0.3.2.
-- **Identity and version resolution inside compiled binaries.** A single-file
-  binary has no on-disk `VERSION` or `.fulmen/app.yaml`, and tsfulmen's schema
-  registry (used to validate identity) is filesystem-backed and absent in the
-  binary. Identity, version, git commit, and build date are now injected at build
-  time and resolved via a new `resolveIdentity()` fallback, so the binary reports
-  its real version and identity instead of `0.0.0-unknown` or failing to start.
-- **Config-backed commands inside compiled binaries.** The config defaults and
-  schema were read from cwd-relative paths absent in a single-file binary. They
-  are now embedded at build time and materialized to a temp path at runtime;
-  schema validation is skipped in-binary (the embedded defaults are validated in
-  CI, and tuvan still enforces its own invariants). `doctor`/`envinfo` now load
-  config standalone.
-- **`health`/`doctor` are embedded-aware.** They no longer report a compiled
-  binary as unhealthy/misinstalled for missing on-disk `VERSION`/`.fulmen/app.yaml`/
-  `package.json`; they recognize the embedded identity/version and bundled tsfulmen.
-- **`--json` output is clean.** Config-bootstrap diagnostics now write to stderr,
-  so `doctor --json` / `envinfo --json` emit only JSON on stdout (pipeable to `jq`).
+- **Compiled release binaries were dead-on-arrival, then CLI-only.** The
+  `bun build --compile` single-file binaries shipped by `release.yml` crashed at
+  startup and/or ran the wrong CLI. Two upstream root causes were resolved by
+  earlier tsfulmen releases (string-metrics-wasm 0.3.10 eager-WASM `ENOENT`; the
+  `tsfulmen-schema` CLI self-executing under compile and hijacking the host CLI).
+  This release adopts `@fulmenhq/tsfulmen` **v0.4.0** to close the remaining gap:
+  its compile-safe SSOT asset embedding makes schemas, JSON-Schema metaschemas,
+  and foundry catalogs resolve without the filesystem, so the binary is now a
+  **full standalone artifact** — server included.
+- **Config is now schema-validated inside the binary.** Previously the binary
+  skipped schema validation (the metaschema was filesystem-backed and absent), so
+  invalid config slipped through — e.g. `TUVAN_SERVER_PORT=abc tuvan doctor --json`
+  exited 0. The metaschema now resolves from tsfulmen's embedded assets, so the
+  binary validates config and rejects bad values (failed check, non-zero exit).
+- **`serve` works in the standalone binary.** The HTTP server depended on
+  tsfulmen's foundry signals catalog, which was filesystem-backed; it is now
+  embedded, so the compiled binary starts the data + control plane normally. The
+  prior "run via Node/npm" refusal is removed.
+- **`envinfo` reports embedded metadata.** Compiled `envinfo` / `envinfo --json`
+  read the embedded version and the injected tsfulmen version instead of showing
+  `unknown` / "package.json not found", matching `version`/`health`/`doctor`.
+- **`health`/`doctor` are embedded-aware** and **`--json` output is clean**
+  (config-bootstrap diagnostics go to stderr; stdout is pipeable to `jq`).
 
 ### Added
 
@@ -47,33 +43,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A host-platform **release smoke test** in `build:all` (and therefore
   `release.yml`): it runs the binary's `version`, `doctor --json`, and `serve`
   from outside the repo and fails the build on a startup crash, an
-  unresolved/shadowed version, a config-load error, or a non-graceful `serve`.
-- `version --extended` now reports the `@fulmenhq/tsfulmen` version inside
-  compiled binaries (injected at build time, since there is no `package.json` on
-  disk), and attributes `crucible` to the bundling tsfulmen (e.g. `via
-  @fulmenhq/tsfulmen 0.3.2`) when the app does not sync crucible SSOT directly,
-  instead of showing `unknown`.
+  unresolved/shadowed version, a config-load error, or a server that fails to
+  bind. The `serve` check now asserts the server actually **binds** (was: asserts
+  a graceful refusal).
+- `version --extended` reports the `@fulmenhq/tsfulmen` version inside compiled
+  binaries (injected at build time), and attributes `crucible` to the bundling
+  tsfulmen when the app does not sync crucible SSOT directly, instead of `unknown`.
 
 ### Changed
 
-- Upgraded `@fulmenhq/tsfulmen` `0.3.0` → **`0.3.2`** (brings string-metrics-wasm
-  0.3.10 and compile-safe CLIs/bins). Added `yaml` as a direct dependency (already
-  present transitively) to parse the build-time injected identity.
+- Upgraded `@fulmenhq/tsfulmen` `0.3.0` → **`0.4.0`** (compile-safe SSOT asset
+  embedding: `AssetResolver` + `TSFULMEN_ASSET_MODE`, embedded schemas /
+  metaschemas / foundry catalogs / taxonomy). `yaml` remains a direct dependency,
+  used to parse the build-embedded config defaults for the inline `loadConfig`
+  path.
+- **Dropped the compiled-binary workarounds** now obsoleted by v0.4.0: config
+  defaults/schema are passed *inline* to `loadConfig({ defaults, schema })`
+  (tsfulmen ≥ 0.3.3) instead of being materialized to a temp file; the embedded
+  identity is registered and **validated** (no skip-validation); the `serve`
+  compiled-binary guard and the temp-file/`resolveIdentity()` fallback are removed.
 - Regenerated the goneat git hooks **without** the guardian browser-intercept
   (`goneat hooks generate` without `--with-guardian`), suited to direct-push
   workflows. Also picked up newer-template improvements (`set -f` glob guard,
   `--staged-only` pre-commit) and removed an orphaned guardian comment goneat
   leaves behind on regeneration.
-
-### Scope
-
-- The `bun --compile` standalone binaries are **CLI/diagnostic tools** in this
-  release (`version`, `health`, `doctor`, `envinfo`). The **HTTP server
-  (`serve`) is not yet supported in the standalone binary** — `@fulmenhq/tsfulmen`
-  loads SSOT assets (foundry catalogs, schemas) from the filesystem, absent in a
-  single-file binary. Run the server from a Node/npm install (`node dist/index.js
-  serve`); in the binary, `serve` exits with a clear message pointing there. Full
-  standalone server support is tracked upstream (tsfulmen compile-safe assets).
 
 ### Notes
 
