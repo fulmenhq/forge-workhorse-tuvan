@@ -11,7 +11,7 @@ can't silently regress again.
 ### Highlights
 
 - **Full standalone single-file binaries.** Building on `@fulmenhq/tsfulmen`
-  **v0.4.0** (compile-safe SSOT asset embedding), each binary starts cleanly,
+  **v0.4.1** (v0.4.0 compile-safe SSOT asset embedding + v0.4.1 hardening), each binary starts cleanly,
   reports its own version/identity, and runs every command — `version`, `health`,
   `doctor`, `envinfo`, **and `serve`** — from anywhere, not just a repo checkout.
 - **Real config validation in the binary.** Configuration is schema-validated

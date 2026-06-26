@@ -16,10 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   startup and/or ran the wrong CLI. Two upstream root causes were resolved by
   earlier tsfulmen releases (string-metrics-wasm 0.3.10 eager-WASM `ENOENT`; the
   `tsfulmen-schema` CLI self-executing under compile and hijacking the host CLI).
-  This release adopts `@fulmenhq/tsfulmen` **v0.4.0** to close the remaining gap:
-  its compile-safe SSOT asset embedding makes schemas, JSON-Schema metaschemas,
-  and foundry catalogs resolve without the filesystem, so the binary is now a
-  **full standalone artifact** — server included.
+  This release adopts `@fulmenhq/tsfulmen` **v0.4.1** to close the remaining gap:
+  v0.4.0's compile-safe SSOT asset embedding makes schemas, JSON-Schema
+  metaschemas, and foundry catalogs resolve without the filesystem (v0.4.1 adds
+  asset-resolver security hardening), so the binary is now a **full standalone
+  artifact** — server included.
 - **Config is now schema-validated inside the binary.** Previously the binary
   skipped schema validation (the metaschema was filesystem-backed and absent), so
   invalid config slipped through — e.g. `TUVAN_SERVER_PORT=abc tuvan doctor --json`
@@ -52,9 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Upgraded `@fulmenhq/tsfulmen` `0.3.0` → **`0.4.0`** (compile-safe SSOT asset
-  embedding: `AssetResolver` + `TSFULMEN_ASSET_MODE`, embedded schemas /
-  metaschemas / foundry catalogs / taxonomy). `yaml` remains a direct dependency,
+- Upgraded `@fulmenhq/tsfulmen` `0.3.0` → **`0.4.1`** (v0.4.0 compile-safe SSOT
+  asset embedding: `AssetResolver` + `TSFULMEN_ASSET_MODE`, embedded schemas /
+  metaschemas / foundry catalogs / taxonomy; v0.4.1 asset-resolver security
+  hardening). `yaml` remains a direct dependency,
   used to parse the build-embedded config defaults for the inline `loadConfig`
   path.
 - **Dropped the compiled-binary workarounds** now obsoleted by v0.4.0: config
