@@ -459,7 +459,7 @@ release-download: ## Download assets from GitHub draft release (TAG=vX.Y.Z requi
 	@./scripts/release-download.sh "$(TAG)" "$(DIST_RELEASE)"
 
 release-checksums: ## Generate SHA256SUMS and SHA512SUMS from downloaded artifacts
-	@./scripts/generate-checksums.sh "$(DIST_RELEASE)"
+	@./scripts/generate-checksums.sh "$(DIST_RELEASE)" "$(BINARY_NAME)"
 
 release-sign: ## Sign checksum manifests (minisign + optional PGP, TAG=vX.Y.Z required)
 	@if [ -z "$(TAG)" ]; then echo "TAG not set. Usage: make release-sign TAG=vX.Y.Z (v prefix required)"; exit 1; fi
