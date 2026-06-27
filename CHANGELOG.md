@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used to parse the build-embedded config defaults for the inline `loadConfig`
   path.
 - **Dropped the compiled-binary workarounds** now obsoleted by v0.4.0: config
-  defaults/schema are passed *inline* to `loadConfig({ defaults, schema })`
+  defaults/schema are passed _inline_ to `loadConfig({ defaults, schema })`
   (tsfulmen ≥ 0.3.3) instead of being materialized to a temp file; the embedded
   identity is registered and **validated** (no skip-validation); the `serve`
   compiled-binary guard and the temp-file/`resolveIdentity()` fallback are removed.
