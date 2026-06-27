@@ -1,15 +1,21 @@
-# npm Publishing (Optional Template)
+# npm Publishing (Optional Template Scaffolding — DISABLED for the template)
+#
+# IMPORTANT: forge-workhorse-tuvan is a TEMPLATE, not a published package. You do
+# not install it from npm — you CDRL it (clone → degit → refit → launch) and then
+# publish YOUR OWN refit tool. To enforce that, the package ships `"private": true`
+# and this workflow has a guard that refuses to publish while the package is still
+# private or still uses the template name (see the "Publish to npm" step). So as
+# shipped, this workflow CANNOT publish the template — it exists only as reference
+# scaffolding and a dry-run validator for CDRL consumers.
 #
 # OIDC trusted publishing to npm — no NPM_TOKEN secret needed.
 # Triggered manually via workflow_dispatch.
 #
-# SETUP (for CDRL users who want npm publishing):
-#   1. Create a GitHub Environment named "publish-npm"
-#   2. Link your npm package to GitHub via npm's "Trusted Publishing" settings
-#   3. Optionally add tag-based deployment protection rules
-#
-# This workflow is included as a starting point. Tuvan itself is not
-# published to npm — it's a template meant to be CDRL'd.
+# ENABLE (for CDRL users publishing THEIR refit app):
+#   1. In your refit: rename the package (`name`) and remove `"private": true`
+#   2. Create a GitHub Environment named "publish-npm"
+#   3. Link your npm package to GitHub via npm's "Trusted Publishing" settings
+#   4. Optionally add tag-based deployment protection rules
 name: Publish to npm
 "on":
   workflow_dispatch:
@@ -75,6 +81,18 @@ jobs:
             npm pack --dry-run
             echo "Dry run complete (no publish)"
           else
+            # Template guard — forge-workhorse-tuvan is a template, not a published
+            # package (ships "private": true + the template name). A CDRL consumer
+            # who wants npm publishing renames the package and removes "private" in
+            # their refit; until then, refuse so the template never reaches a registry.
+            PKG_NAME=$(node -p "require('./package.json').name")
+            IS_PRIVATE=$(node -p "require('./package.json').private === true")
+            if [ "$IS_PRIVATE" = "true" ] || [ "$PKG_NAME" = "@fulmenhq/forge-workhorse-tuvan" ]; then
+              echo "::notice::Refusing to publish the forge-workhorse-tuvan TEMPLATE to npm."
+              echo "A template is meant to be CDRL'd (clone → degit → refit → launch), not published."
+              echo "To publish YOUR refit app: set a new package name and remove \"private\": true, then re-run."
+              exit 0
+            fi
             echo "Publishing to npm via OIDC..."
             $LOCAL_NPM publish --access public --provenance
             echo "Published successfully"

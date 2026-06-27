@@ -4,6 +4,7 @@
   "description": "Fulmen TypeScript workhorse template - production-ready foundation for robust, scalable Node.js backends",
   "author": "3 Leaps, LLC",
   "license": "MIT",
+  "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.12.0",

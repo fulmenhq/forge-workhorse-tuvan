@@ -4,6 +4,8 @@
 
 Named after the Tuvan horse breed from the Russian steppe (Tuva Republic, southern Siberia), renowned for exceptional strength, endurance in harsh conditions, and reliability in demanding environments. The binary is simply called `tuvan`.
 
+> **This is a template, not a published package.** You don't `npm install` it or download the `tuvan` binary to use it — you **CDRL** it (Clone → Degit → Refit → Launch) into your own tool. The package ships `"private": true` so it can't be accidentally published, and the included `publish.yml` refuses to publish the template as-is. When you refit it into your own app and want to publish _that_, remove `private` and rename the package — see the [CDRL guide](docs/development/fulmen_cdrl_guide.md).
+
 ## Overview
 
 `forge-workhorse-tuvan` is a **Level 2 template** in the Fulmen ecosystem—a production-ready starter that provides:
