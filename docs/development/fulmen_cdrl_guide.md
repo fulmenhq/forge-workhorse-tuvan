@@ -3,8 +3,8 @@ title: "Fulmen CDRL Guide – forge-workhorse-tuvan"
 description: "Step-by-step instructions for cloning, degitting, refitting, and launching the Tuvan TypeScript workhorse template"
 author: "Fulmen Enterprise Architect (@fulmen-ea-steward)"
 date: "2025-11-19"
-last_updated: "2025-11-19"
-status: "bootstrap"
+last_updated: "2026-06-27"
+status: "active"
 tags: ["cdrl", "template", "tuvan", "typescript", "workhorse"]
 ---
 
@@ -24,7 +24,7 @@ This guide explains how to transform `forge-workhorse-tuvan` into your own produ
 | Requirement | Minimum          | Notes                                             |
 | ----------- | ---------------- | ------------------------------------------------- |
 | Git         | 2.43+            | Needed for clone/degit                            |
-| Node.js     | 20.0.0+          | Matches tsfulmen runtime floor                    |
+| Node.js     | 22.12.0+         | Matches tsfulmen runtime floor                    |
 | Bun         | 1.0.0+           | Preferred package manager (npm works as fallback) |
 | Make        | POSIX-compatible | Executes bootstrap/check targets                  |
 
@@ -97,9 +97,12 @@ Why it matters:
 ### 5.2 Update package metadata & versioning
 
 1. `package.json`: change `name`, `description`, `repository`, `bugs`, `homepage`, and `author`
-2. `VERSION`: set your semantic or CalVer string
-3. Run `make version-propagate` to sync `package.json` and any other metadata
-4. Update `src/core/version.ts` (or equivalent) if it exports app version info
+2. **`package.json` `"private"`** — the template ships `"private": true` so it can **never be accidentally published to npm** while it still carries the template's identity (and the `publish.yml` workflow guards on this too — see §5.8). Decide your posture:
+   - **Not publishing to a registry** (most internal services / self-hosted tools): leave `"private": true` as-is.
+   - **Publishing your refit app to npm**: **remove `"private": true`** _after_ you've renamed `name` in step 1. Until both are done, publishing stays blocked by design.
+3. `VERSION`: set your semantic or CalVer string
+4. Run `make version-propagate` to sync `package.json` and any other metadata
+5. Update `src/core/version.ts` (or equivalent) if it exports app version info
 
 ### 5.3 Rename environment variables
 
@@ -167,16 +170,19 @@ const configPaths = {
 
 The template ships with three GitHub Actions workflows in `.github/workflows/`:
 
-| Workflow      | Trigger                    | Purpose                                        |
-| ------------- | -------------------------- | ---------------------------------------------- |
-| `ci.yml`      | Push to `main`, PRs        | Format, lint, typecheck, test, build           |
-| `release.yml` | Semver tag push (`v*.*.*`) | Build binaries, npm pack, draft GitHub release |
-| `publish.yml` | Manual (workflow_dispatch) | OIDC npm publishing (optional)                 |
+| Workflow      | Trigger                    | Purpose                                                                  |
+| ------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `ci.yml`      | Push to `main`, PRs        | Format, lint, typecheck, test, build                                     |
+| `release.yml` | Semver tag push (`v*.*.*`) | Build binaries, npm pack, draft GitHub release                           |
+| `publish.yml` | Manual (workflow_dispatch) | OIDC npm publishing — **disabled for the template** (guarded; see below) |
+
+> **The template is not published.** `forge-workhorse-tuvan` itself is meant to be CDRL'd, not installed from a registry. It ships `"private": true` (§5.2) and `publish.yml` refuses to publish while the package is still private or still uses the template name. So out of the box, neither `npm publish` nor the workflow can push the template to npm. When you refit it into your own app and want to publish _that_, see "To enable publishing" below.
 
 **What to keep as-is:**
 
 - `ci.yml` — works without changes after refit (no hardcoded project names)
-- `publish.yml` — generic OIDC publishing template; just create the `publish-npm` GitHub Environment
+- `publish.yml` — **as shipped it cannot publish** (private + template-name guard); it stays as reference scaffolding and a dry-run validator.
+  - **To enable publishing your refit:** remove `"private": true` and rename the package (§5.2), create the `publish-npm` GitHub Environment, and configure npm Trusted Publishing for your package.
 
 **What to customize:**
 
@@ -205,7 +211,7 @@ The signing workflow uses environment variables prefixed with your `SIGNING_ENV_
 
 **What to remove (if not needed):**
 
-- `publish.yml` — delete if you won't publish to npm
+- `publish.yml` — leave it disabled (the default, via `"private": true`) if you won't publish to npm, or delete it outright; either way the private guard prevents accidental publishes
 - Release signing targets in Makefile — delete if you won't sign releases (see Makefile comments)
 
 Keep Makefile targets intact so Fulmen tooling works if you ever upstream fixes. Document any deviations in `.plans/` for auditability.
