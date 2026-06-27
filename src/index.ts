@@ -11,7 +11,6 @@
  * "directory walking" anti-pattern.
  */
 
-import { loadIdentity } from "@fulmenhq/tsfulmen/appidentity";
 import { exitCodes } from "@fulmenhq/tsfulmen/foundry";
 import { Command } from "commander";
 import { createDoctorCommand } from "./cli/commands/doctor.js";
@@ -20,7 +19,7 @@ import { createHealthCommand } from "./cli/commands/health.js";
 import { createServeCommand } from "./cli/commands/serve.js";
 import { createVersionCommand } from "./cli/commands/version.js";
 // Import embedded identity initialization (MUST be first)
-import { initializeEmbeddedIdentity } from "./core/embedded-identity.js";
+import { initializeEmbeddedIdentity, resolveIdentity } from "./core/embedded-identity.js";
 import { getVersion } from "./core/version.js";
 
 /**
@@ -31,8 +30,9 @@ async function main(): Promise<void> {
     // Initialize embedded identity FIRST (enables binary to work outside repo)
     await initializeEmbeddedIdentity();
 
-    // Load app identity (will use embedded fallback if filesystem discovery fails)
-    const identity = await loadIdentity();
+    // Load app identity (resolveIdentity covers compiled binaries, where the
+    // file is absent and tsfulmen's schema registry is unavailable)
+    const identity = await resolveIdentity();
     const binaryName = identity.app.binary_name;
 
     // Get version from embedded identity

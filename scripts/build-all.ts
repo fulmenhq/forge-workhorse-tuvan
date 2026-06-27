@@ -16,7 +16,7 @@
  *   bun scripts/build-all.ts
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -84,12 +84,249 @@ function formatSize(bytes: number): string {
   return `${mb.toFixed(1)} MB`;
 }
 
-function main(): void {
-  const binaryName = getBinaryName();
+/**
+ * Build-time identity values injected into each compiled binary.
+ *
+ * Compiled single-file binaries carry no on-disk VERSION file or
+ * .fulmen/app.yaml, so the runtime's filesystem discovery returns null inside
+ * them (it would report version "0.0.0-unknown" and fail identity load). We
+ * inject these via `bun build --define` so the embedded-identity module resolves
+ * them at runtime. See src/core/embedded-identity.ts.
+ */
+interface BuildInfo {
+  version: string;
+  appYaml: string;
+  gitCommit: string;
+  buildDate: string;
+  tsfulmenVersion: string;
+  configDefaults: string;
+  configSchema: string;
+}
 
-  console.log(`Building ${TARGETS.length} binaries for '${binaryName}'`);
+const CONFIG_DEFAULTS_PATH = "config/tuvan/v1.0.0/tuvan-defaults.yaml";
+const CONFIG_SCHEMA_PATH = "schemas/tuvan/v1.0.0/config.schema.json";
+
+function resolveTsfulmenVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync("node_modules/@fulmenhq/tsfulmen/package.json", "utf-8"));
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function gitOrUnknown(args: string[]): string {
+  try {
+    return execFileSync("git", args, { encoding: "utf-8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+function gatherBuildInfo(): BuildInfo {
+  return {
+    version: readFileSync("VERSION", "utf-8").trim(),
+    appYaml: readFileSync(".fulmen/app.yaml", "utf-8"),
+    gitCommit: gitOrUnknown(["rev-parse", "--short=8", "HEAD"]),
+    buildDate: new Date().toISOString(),
+    tsfulmenVersion: resolveTsfulmenVersion(),
+    configDefaults: readFileSync(CONFIG_DEFAULTS_PATH, "utf-8"),
+    configSchema: readFileSync(CONFIG_SCHEMA_PATH, "utf-8"),
+  };
+}
+
+/**
+ * Map the current host platform/arch to a build target suffix, or null if the
+ * host isn't one of our targets. Only the host-matching binary can be executed
+ * for the smoke test — cross-compiled targets can't run on this machine.
+ */
+function hostTargetSuffix(): string | null {
+  const key = `${process.platform}/${process.arch}`;
+  const map: Record<string, string> = {
+    "linux/x64": "linux-amd64",
+    "linux/arm64": "linux-arm64",
+    "darwin/x64": "darwin-amd64",
+    "darwin/arm64": "darwin-arm64",
+    "win32/x64": "windows-amd64",
+  };
+  return map[key] ?? null;
+}
+
+/**
+ * Smoke-test the host-platform binary: it must run the consumer's own `version`
+ * subcommand and report the expected version. This catches two classes of
+ * silently-broken release binary that unit tests and `node dist` runs miss:
+ *   - a startup crash (e.g. an un-embedded WASM/asset), and
+ *   - a shadowed/empty CLI or unresolved version ("0.0.0-unknown").
+ * Run from a temp dir so it can't accidentally pick up the repo's on-disk
+ * VERSION/app.yaml and mask a broken embed.
+ */
+async function smokeTest(binaryName: string, info: BuildInfo): Promise<boolean> {
+  const suffix = hostTargetSuffix();
+  if (!suffix) {
+    console.log(`Smoke test: skipped (host ${process.platform}/${process.arch} is not a target)`);
+    return true;
+  }
+  const ext = process.platform === "win32" ? ".exe" : "";
+  const binary = join(process.cwd(), OUT_DIR, `${binaryName}-${suffix}${ext}`);
+  if (!existsSync(binary)) {
+    console.error(`Smoke test FAILED: host binary not built (${binary})`);
+    return false;
+  }
+
+  // 1) `version` — identity/version resolution and that the binary starts and
+  //    runs its own CLI.
+  process.stdout.write(`Smoke test: ${binaryName}-${suffix} version ... `);
+  try {
+    // Run outside the repo tree so on-disk VERSION/app.yaml can't mask a bad embed.
+    const out = execFileSync(binary, ["version"], { encoding: "utf-8", cwd: "/" }).trim();
+    if (out !== info.version) {
+      console.log("FAILED");
+      console.error(`    expected version "${info.version}", got "${out}"`);
+      return false;
+    }
+    console.log(`ok (${out})`);
+  } catch (err: unknown) {
+    console.log("FAILED");
+    console.error(`    ${smokeErr(err)}`);
+    return false;
+  }
+
+  // 2) `doctor --json` — a config-backed command: exercises the embedded config
+  //    defaults + schema and the diagnostic checks. Must exit 0 (no error-status
+  //    checks) and emit parseable JSON when run outside the repo.
+  process.stdout.write(`Smoke test: ${binaryName}-${suffix} doctor --json ... `);
+  try {
+    const out = execFileSync(binary, ["doctor", "--json"], { encoding: "utf-8", cwd: "/" });
+    const parsed = JSON.parse(out);
+    const errors = (parsed.results ?? []).filter((r: { status?: string }) => r.status === "error");
+    if (errors.length > 0) {
+      console.log("FAILED");
+      console.error(
+        `    doctor reported error checks: ${errors.map((e: { name?: string }) => e.name).join(", ")}`,
+      );
+      return false;
+    }
+    console.log("ok");
+  } catch (err: unknown) {
+    console.log("FAILED");
+    console.error(`    ${smokeErr(err)}`);
+    return false;
+  }
+
+  // 3) `serve` — the HTTP server must actually start and bind in the single-file
+  //    binary now that tsfulmen >= 0.4.0 resolves its foundry catalogs (signals)
+  //    and the rest of the SSOT assets from build-embedded copies. serve runs
+  //    until terminated, so we spawn it, wait for its own "Server listening on"
+  //    line, then kill the whole process group (see serveBinds). Run from a temp
+  //    cwd so it can't pick up the repo's on-disk config/schema.
+  process.stdout.write(`Smoke test: ${binaryName}-${suffix} serve (binds) ... `);
+  const serveResult = await serveBinds(binary);
+  if (serveResult.ok) {
+    console.log("ok (bound, terminated)");
+    return true;
+  }
+  console.log("FAILED");
+  console.error(`    ${serveResult.reason}`);
+  return false;
+}
+
+interface ServeBindsResult {
+  ok: boolean;
+  reason: string;
+}
+
+/**
+ * Spawn the compiled `serve`, confirm it reaches its own "Server listening on"
+ * line (data + control plane bound), then terminate the whole process group.
+ *
+ * Robustness notes:
+ * - Matches the app's own `[<binary>] Server listening on http://...` line, not
+ *   Fastify's per-server `Server listening at` log — the latter is emitted by
+ *   the data plane before the control plane binds, so matching it would
+ *   false-positive on a partial bind.
+ * - Spawns detached and SIGKILLs the process group on the way out, so a hung
+ *   graceful shutdown can never leave a listener holding the port and break the
+ *   next run with EADDRINUSE.
+ * - Surfaces an early exit / EADDRINUSE as a clear failure reason.
+ */
+function serveBinds(binary: string): Promise<ServeBindsResult> {
+  return new Promise<ServeBindsResult>((resolve) => {
+    const child = spawn(binary, ["serve", "--port", "18080", "--control-port", "18081"], {
+      cwd: "/",
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let out = "";
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      if (child.pid !== undefined) {
+        // Kill the whole process group; fall back to the bare pid if needed.
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            /* already exited */
+          }
+        }
+      }
+    };
+
+    const finish = (result: ServeBindsResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const onData = (chunk: Buffer) => {
+      out += chunk.toString();
+      if (out.includes("Server listening on http")) {
+        finish({ ok: true, reason: "" });
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+
+    child.on("error", (err) => {
+      finish({ ok: false, reason: `serve failed to spawn: ${err.message}` });
+    });
+    child.on("exit", (code, signal) => {
+      // Exiting before we saw the listening line means it never bound.
+      const tail = out.split("\n").filter(Boolean).slice(-1)[0] ?? "";
+      const hint = /EADDRINUSE|in use/i.test(out) ? " (port already in use)" : "";
+      finish({
+        ok: false,
+        reason: `serve exited before binding (code=${code}, signal=${signal})${hint}: ${tail}`,
+      });
+    });
+
+    timer = setTimeout(() => {
+      finish({ ok: false, reason: "serve did not report listening within 8s" });
+    }, 8000);
+  });
+}
+
+function smokeErr(err: unknown): string {
+  return err instanceof Error
+    ? (err as { stderr?: Buffer }).stderr?.toString().trim() || err.message
+    : String(err);
+}
+
+async function main(): Promise<void> {
+  const binaryName = getBinaryName();
+  const info = gatherBuildInfo();
+
+  console.log(`Building ${TARGETS.length} binaries for '${binaryName}' v${info.version}`);
   console.log(`  Entry point: ${ENTRY_POINT}`);
   console.log(`  Output dir:  ${OUT_DIR}`);
+  console.log(`  Git commit:  ${info.gitCommit}`);
   console.log();
 
   if (!existsSync(ENTRY_POINT)) {
@@ -99,6 +336,26 @@ function main(): void {
 
   mkdirSync(OUT_DIR, { recursive: true });
 
+  // Build-time identity injected into every binary (see embedded-identity.ts).
+  // JSON.stringify yields a valid JS string literal that `bun --define` parses
+  // as the value; passed as discrete argv tokens, so no shell quoting is needed.
+  const defineArgs = [
+    "--define",
+    `__EMBEDDED_VERSION__=${JSON.stringify(info.version)}`,
+    "--define",
+    `__EMBEDDED_GIT_COMMIT__=${JSON.stringify(info.gitCommit)}`,
+    "--define",
+    `__EMBEDDED_BUILD_DATE__=${JSON.stringify(info.buildDate)}`,
+    "--define",
+    `__EMBEDDED_APP_YAML__=${JSON.stringify(info.appYaml)}`,
+    "--define",
+    `__EMBEDDED_TSFULMEN_VERSION__=${JSON.stringify(info.tsfulmenVersion)}`,
+    "--define",
+    `__EMBEDDED_CONFIG_DEFAULTS__=${JSON.stringify(info.configDefaults)}`,
+    "--define",
+    `__EMBEDDED_CONFIG_SCHEMA__=${JSON.stringify(info.configSchema)}`,
+  ];
+
   let succeeded = 0;
   let failed = 0;
 
@@ -106,12 +363,23 @@ function main(): void {
     const ext = target.os === "windows" ? ".exe" : "";
     const binaryFile = `${binaryName}-${target.suffix}${ext}`;
     const outfile = join(OUT_DIR, binaryFile);
-    const cmd = `bun build ${ENTRY_POINT} --compile --target=${target.bunTarget} --outfile ${outfile}`;
 
     process.stdout.write(`  ${target.os}/${target.arch} -> ${binaryFile} ... `);
 
     try {
-      execSync(cmd, { stdio: "pipe" });
+      execFileSync(
+        "bun",
+        [
+          "build",
+          ENTRY_POINT,
+          "--compile",
+          `--target=${target.bunTarget}`,
+          "--outfile",
+          outfile,
+          ...defineArgs,
+        ],
+        { stdio: "pipe" },
+      );
       const size = formatSize(statSync(outfile).size);
       console.log(`ok (${size})`);
       succeeded++;
@@ -132,6 +400,16 @@ function main(): void {
   if (failed > 0) {
     process.exit(1);
   }
+
+  // Gate: the host-platform binary must actually run and report its version.
+  console.log();
+  if (!(await smokeTest(binaryName, info))) {
+    console.error("Release binaries failed the smoke test — see above.");
+    process.exit(1);
+  }
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

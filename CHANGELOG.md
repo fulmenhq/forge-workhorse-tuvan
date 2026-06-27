@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-26
+
+### Fixed
+
+- **Compiled release binaries were dead-on-arrival, then CLI-only.** The
+  `bun build --compile` single-file binaries shipped by `release.yml` crashed at
+  startup and/or ran the wrong CLI. Two upstream root causes were resolved by
+  earlier tsfulmen releases (string-metrics-wasm 0.3.10 eager-WASM `ENOENT`; the
+  `tsfulmen-schema` CLI self-executing under compile and hijacking the host CLI).
+  This release adopts `@fulmenhq/tsfulmen` **v0.4.1** to close the remaining gap:
+  v0.4.0's compile-safe SSOT asset embedding makes schemas, JSON-Schema
+  metaschemas, and foundry catalogs resolve without the filesystem (v0.4.1 adds
+  asset-resolver security hardening), so the binary is now a **full standalone
+  artifact** — server included.
+- **Config is now schema-validated inside the binary.** Previously the binary
+  skipped schema validation (the metaschema was filesystem-backed and absent), so
+  invalid config slipped through — e.g. `TUVAN_SERVER_PORT=abc tuvan doctor --json`
+  exited 0. The metaschema now resolves from tsfulmen's embedded assets, so the
+  binary validates config and rejects bad values (failed check, non-zero exit).
+- **`serve` works in the standalone binary.** The HTTP server depended on
+  tsfulmen's foundry signals catalog, which was filesystem-backed; it is now
+  embedded, so the compiled binary starts the data + control plane normally. The
+  prior "run via Node/npm" refusal is removed.
+- **`envinfo` reports embedded metadata.** Compiled `envinfo` / `envinfo --json`
+  read the embedded version and the injected tsfulmen version instead of showing
+  `unknown` / "package.json not found", matching `version`/`health`/`doctor`.
+- **`health`/`doctor` are embedded-aware** and **`--json` output is clean**
+  (config-bootstrap diagnostics go to stderr; stdout is pipeable to `jq`).
+
+### Added
+
+- Build-time embedding in `scripts/build-all.ts`: version, git commit, build
+  date, `.fulmen/app.yaml`, and the config defaults + schema are injected into
+  every compiled binary via `bun --define`.
+- A host-platform **release smoke test** in `build:all` (and therefore
+  `release.yml`): it runs the binary's `version`, `doctor --json`, and `serve`
+  from outside the repo and fails the build on a startup crash, an
+  unresolved/shadowed version, a config-load error, or a server that fails to
+  bind. The `serve` check now asserts the server actually **binds** (was: asserts
+  a graceful refusal).
+- `version --extended` reports the `@fulmenhq/tsfulmen` version inside compiled
+  binaries (injected at build time), and attributes `crucible` to the bundling
+  tsfulmen when the app does not sync crucible SSOT directly, instead of `unknown`.
+
+### Changed
+
+- Upgraded `@fulmenhq/tsfulmen` `0.3.0` → **`0.4.1`** (v0.4.0 compile-safe SSOT
+  asset embedding: `AssetResolver` + `TSFULMEN_ASSET_MODE`, embedded schemas /
+  metaschemas / foundry catalogs / taxonomy; v0.4.1 asset-resolver security
+  hardening). `yaml` remains a direct dependency,
+  used to parse the build-embedded config defaults for the inline `loadConfig`
+  path.
+- **Dropped the compiled-binary workarounds** now obsoleted by v0.4.0: config
+  defaults/schema are passed _inline_ to `loadConfig({ defaults, schema })`
+  (tsfulmen ≥ 0.3.3) instead of being materialized to a temp file; the embedded
+  identity is registered and **validated** (no skip-validation); the `serve`
+  compiled-binary guard and the temp-file/`resolveIdentity()` fallback are removed.
+- Regenerated the goneat git hooks **without** the guardian browser-intercept
+  (`goneat hooks generate` without `--with-guardian`), suited to direct-push
+  workflows. Also picked up newer-template improvements (`set -f` glob guard,
+  `--staged-only` pre-commit) and removed an orphaned guardian comment goneat
+  leaves behind on regeneration.
+
+### Notes
+
+- Versions **0.1.3–0.1.6** appear above but were never git-tagged or released —
+  they were unreleased internal iterations (and their compiled binaries were
+  affected by the bugs fixed here). 0.1.7 is tagged from the current branch; no
+  retroactive tags are created for 0.1.3–0.1.6.
+
 ## [0.1.6] - 2026-06-08
 
 ### Changed
@@ -122,7 +192,8 @@ All dev-only; no runtime dependency or public API change. Verified under TypeScr
 - Updated dependency on `@fulmenhq/tsfulmen` to v0.1.13 for full configuration support.
 - Refactored project structure to align with Fulmen Forge Workhorse Standard.
 
-[Unreleased]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.2...v0.1.7
 [0.1.2]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/fulmenhq/forge-workhorse-tuvan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/fulmenhq/forge-workhorse-tuvan/releases/tag/v0.1.0

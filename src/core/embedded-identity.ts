@@ -19,7 +19,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hasEmbeddedIdentity, registerEmbeddedIdentity } from "@fulmenhq/tsfulmen/appidentity";
+import {
+  hasEmbeddedIdentity,
+  type Identity,
+  loadIdentity,
+  registerEmbeddedIdentity,
+} from "@fulmenhq/tsfulmen/appidentity";
 
 // Get directory of this module (works in dist/ after build)
 const __filename = fileURLToPath(import.meta.url);
@@ -43,6 +48,53 @@ let embeddedGitCommit: string | null = null;
  * Embedded build date (set at build time)
  */
 let embeddedBuildDate: string | null = null;
+
+/**
+ * Build-time injected identity values.
+ *
+ * Single-file binaries produced by `bun build --compile` carry no on-disk
+ * VERSION file or `.fulmen/app.yaml`, so filesystem discovery returns null
+ * inside them. The build (scripts/build-all.ts) injects the values below via
+ * `bun build --define`, which replaces these identifiers with string literals
+ * at compile time. In non-compiled runs (tsx/node) the identifiers are
+ * undefined; the `typeof` guards yield null and on-disk discovery remains the
+ * source of truth. `typeof <undeclared>` is the one identifier reference that
+ * does not throw at runtime, so the guards are safe when nothing is injected.
+ */
+declare const __EMBEDDED_APP_YAML__: string | undefined;
+declare const __EMBEDDED_VERSION__: string | undefined;
+declare const __EMBEDDED_GIT_COMMIT__: string | undefined;
+declare const __EMBEDDED_BUILD_DATE__: string | undefined;
+declare const __EMBEDDED_TSFULMEN_VERSION__: string | undefined;
+
+/**
+ * Resolved @fulmenhq/tsfulmen version, injected at build time.
+ *
+ * In dev/node, version --extended reads this from package.json on disk; a
+ * compiled binary has no package.json, so the build injects the resolved
+ * version here for the extended-version output.
+ */
+export function getInjectedTsfulmenVersion(): string | null {
+  return typeof __EMBEDDED_TSFULMEN_VERSION__ !== "undefined"
+    ? __EMBEDDED_TSFULMEN_VERSION__
+    : null;
+}
+
+function buildInjectedAppYaml(): string | null {
+  return typeof __EMBEDDED_APP_YAML__ !== "undefined" ? __EMBEDDED_APP_YAML__ : null;
+}
+
+function buildInjectedVersion(): string | null {
+  return typeof __EMBEDDED_VERSION__ !== "undefined" ? __EMBEDDED_VERSION__ : null;
+}
+
+function buildInjectedGitCommit(): string | null {
+  return typeof __EMBEDDED_GIT_COMMIT__ !== "undefined" ? __EMBEDDED_GIT_COMMIT__ : null;
+}
+
+function buildInjectedBuildDate(): string | null {
+  return typeof __EMBEDDED_BUILD_DATE__ !== "undefined" ? __EMBEDDED_BUILD_DATE__ : null;
+}
 
 /**
  * Try to read VERSION file from various locations relative to module
@@ -106,8 +158,12 @@ export async function initializeEmbeddedIdentity(): Promise<boolean> {
     return false;
   }
 
-  // Try to discover and register app.yaml
-  const appYaml = discoverAppYaml();
+  // Register the app.yaml: the on-disk file in dev/node runs, or the build-time
+  // injected copy in a compiled single-file binary (which has no app.yaml on
+  // disk). tsfulmen >= 0.4.0 resolves the app-identity schema from build-embedded
+  // assets, so registerEmbeddedIdentity validates in the binary too — no
+  // skip-validation workaround needed.
+  const appYaml = discoverAppYaml() ?? buildInjectedAppYaml();
   if (appYaml) {
     try {
       await registerEmbeddedIdentity(appYaml);
@@ -118,10 +174,38 @@ export async function initializeEmbeddedIdentity(): Promise<boolean> {
     }
   }
 
-  // Cache version from VERSION file
-  embeddedVersion = discoverVersionFile();
+  // Cache version: prefer the on-disk VERSION file (dev/node), falling back to
+  // the build-time injected value (compiled binaries have no VERSION on disk).
+  embeddedVersion = discoverVersionFile() ?? buildInjectedVersion();
+
+  // Git commit and build date are only available via build-time injection.
+  if (!embeddedGitCommit) {
+    embeddedGitCommit = buildInjectedGitCommit();
+  }
+  if (!embeddedBuildDate) {
+    embeddedBuildDate = buildInjectedBuildDate();
+  }
 
   return hasEmbeddedIdentity();
+}
+
+let cachedIdentity: Identity | null = null;
+
+/**
+ * Resolve the application identity, working in every runtime context.
+ *
+ * `initializeEmbeddedIdentity()` (called at CLI startup) registers the embedded
+ * identity from the on-disk app.yaml (dev/node) or the build-injected copy
+ * (compiled single-file binary), so tsfulmen's loadIdentity() returns it without
+ * touching the filesystem in the binary. Result is memoized so repeated calls
+ * (CLI startup + config loader) are cheap and consistent.
+ */
+export async function resolveIdentity(): Promise<Identity> {
+  if (cachedIdentity) {
+    return cachedIdentity;
+  }
+  cachedIdentity = await loadIdentity();
+  return cachedIdentity;
 }
 
 /**

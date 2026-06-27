@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## v0.1.7 (2026-06-26): Full Standalone Compiled Binaries + De-Guardianed Hooks
+
+This release makes the cross-platform `bun --compile` release binaries work as
+**full standalone artifacts** — server included — and adds a release gate so they
+can't silently regress again.
+
+### Highlights
+
+- **Full standalone single-file binaries.** Building on `@fulmenhq/tsfulmen`
+  **v0.4.1** (v0.4.0 compile-safe SSOT asset embedding + v0.4.1 hardening), each binary starts cleanly,
+  reports its own version/identity, and runs every command — `version`, `health`,
+  `doctor`, `envinfo`, **and `serve`** — from anywhere, not just a repo checkout.
+- **Real config validation in the binary.** Configuration is schema-validated
+  inside the compiled binary, so invalid config is rejected (e.g.
+  `TUVAN_SERVER_PORT=abc tuvan doctor --json` now fails and exits non-zero
+  instead of silently passing).
+- **Release smoke test asserts the server binds.** `build:all` (and the release
+  workflow) runs the freshly built host binary's `version`, `doctor --json`, and
+  `serve` from outside the repo and fails the build unless they behave correctly —
+  the `serve` check now confirms the server actually binds.
+- **Hooks without guardian.** The goneat git hooks were regenerated without the
+  guardian browser-approval intercept, matching direct-push workflows.
+
+### Upgrading
+
+Template/CDRL consumers: re-run `make hooks-ensure` (or `goneat hooks generate &&
+goneat hooks install`) if you want the de-guardianed hooks, and rebuild binaries
+with `make build:all` — they now embed identity, version, and config assets and
+run the server standalone.
+
+### Note on 0.1.3–0.1.6
+
+Those versions appear in the CHANGELOG but were unreleased internal iterations
+and were never tagged; 0.1.7 is the next tagged release after 0.1.2.
+
 ## v0.1.2 (2026-02-06): Public Readiness — Licensing + Dependency Refresh
 
 A small housekeeping release preparing forge-workhorse-tuvan for public visibility.

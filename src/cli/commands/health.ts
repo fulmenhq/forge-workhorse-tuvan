@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import { exitCodes } from "@fulmenhq/tsfulmen/foundry";
 import { Command } from "commander";
+import { getVersion } from "../../core/version.js";
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -57,26 +58,26 @@ function checkAppIdentity(identity: Identity): HealthCheckResult {
 }
 
 /**
- * Check if VERSION file exists and is readable
+ * Check that a version resolves.
+ *
+ * Prefers the on-disk VERSION file (dev/installed runs); for a compiled
+ * single-file binary, which has no VERSION on disk, accepts the version
+ * embedded at build time. Only an unresolved version ("0.0.0-unknown") fails.
  *
  * @returns Health check result
  */
-function checkVersionFile(): HealthCheckResult {
+function checkVersion(): HealthCheckResult {
   const versionPath = join(__dirname, "..", "..", "..", "VERSION");
-
-  if (!existsSync(versionPath)) {
-    return {
-      name: "VERSION file",
-      status: "fail",
-      message: "VERSION file not found",
-    };
+  if (existsSync(versionPath)) {
+    return { name: "Version", status: "pass", message: "VERSION file exists" };
   }
 
-  return {
-    name: "VERSION file",
-    status: "pass",
-    message: "VERSION file exists",
-  };
+  const version = getVersion();
+  if (version && version !== "0.0.0-unknown") {
+    return { name: "Version", status: "pass", message: `Version ${version} (embedded)` };
+  }
+
+  return { name: "Version", status: "fail", message: "Version could not be resolved" };
 }
 
 /**
@@ -133,12 +134,7 @@ function checkNodeVersion(): HealthCheckResult {
  * @returns Array of health check results
  */
 function runHealthChecks(identity: Identity): HealthCheckResult[] {
-  return [
-    checkNodeVersion(),
-    checkAppIdentity(identity),
-    checkVersionFile(),
-    checkTsfulmenModules(),
-  ];
+  return [checkNodeVersion(), checkAppIdentity(identity), checkVersion(), checkTsfulmenModules()];
 }
 
 /**

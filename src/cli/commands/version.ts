@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import { getCrucibleVersion } from "@fulmenhq/tsfulmen/crucible";
 import { Command } from "commander";
+import { getInjectedTsfulmenVersion } from "../../core/embedded-identity.js";
 import { getBuildDate, getGitCommit, getVersion } from "../../core/version.js";
 
 // Get __dirname equivalent in ESM
@@ -95,8 +96,24 @@ function getExtendedVersionInfo(identity: Identity): ExtendedVersionInfo {
     // Keep default "unknown"
   }
 
-  // Get Crucible version from tsfulmen shim
+  // Compiled single-file binaries have no package.json on disk, so the lookup
+  // above yields "unknown"; fall back to the version injected at build time.
+  if (tsfulmenVersion === "unknown") {
+    tsfulmenVersion = getInjectedTsfulmenVersion() ?? "unknown";
+  }
+
+  // Get Crucible version from tsfulmen shim. getCrucibleVersion() reports the
+  // CONSUMER's own crucible sync (.crucible/metadata/sync-keys.yaml); this
+  // workhorse doesn't sync SSOT directly (tsfulmen does), so it returns
+  // "unknown". In that case, attribute crucible to the tsfulmen that bundles it
+  // rather than showing a bare "unknown".
   const crucibleInfo = getCrucibleVersion();
+  const crucible =
+    crucibleInfo.version !== "unknown"
+      ? crucibleInfo.version
+      : tsfulmenVersion !== "unknown"
+        ? `via @fulmenhq/tsfulmen ${tsfulmenVersion}`
+        : "unknown";
 
   return {
     version,
@@ -110,7 +127,7 @@ function getExtendedVersionInfo(identity: Identity): ExtendedVersionInfo {
     runtime: getRuntimeInfo(),
     dependencies: {
       tsfulmen: tsfulmenVersion.replace(/^[\^~]/, ""),
-      crucible: crucibleInfo.version,
+      crucible,
     },
   };
 }

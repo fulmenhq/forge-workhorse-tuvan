@@ -10,11 +10,34 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Identity } from "@fulmenhq/tsfulmen/appidentity";
 import { Command } from "commander";
+import { getInjectedTsfulmenVersion } from "../../core/embedded-identity.js";
+import { getVersion } from "../../core/version.js";
 import { analyzeEnvVar, type EnvVarDescriptor, type EnvVarStatus } from "../utils/envvars.js";
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/**
+ * Resolve the declared @fulmenhq/tsfulmen version.
+ *
+ * A compiled single-file binary carries no package.json on disk, so the build
+ * injects the resolved tsfulmen version; in dev/node we read the declared pin
+ * from package.json. Returns undefined when neither source is available.
+ */
+function resolveTsfulmenVersion(): string | undefined {
+  const injected = getInjectedTsfulmenVersion();
+  if (injected) {
+    return injected;
+  }
+  try {
+    const packagePath = join(__dirname, "..", "..", "..", "package.json");
+    const packageJson = JSON.parse(readFileSync(packagePath, "utf-8"));
+    return packageJson.dependencies?.["@fulmenhq/tsfulmen"] ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Get all environment variables matching the app's prefix
@@ -55,18 +78,11 @@ async function formatEnvInfo(identity: Identity): Promise<string> {
   lines.push(`  Config Name: ${identity.app.config_name}`);
   lines.push("");
 
-  // Version Info
-  try {
-    const versionPath = join(__dirname, "..", "..", "..", "VERSION");
-    const version = readFileSync(versionPath, "utf-8").trim();
-    lines.push("Version:");
-    lines.push(`  Current: ${version}`);
-    lines.push("");
-  } catch {
-    lines.push("Version:");
-    lines.push("  Current: unknown (VERSION file not found)");
-    lines.push("");
-  }
+  // Version Info — getVersion() reads the embedded version, so this works in a
+  // compiled single-file binary (no VERSION file on disk) as well as in dev.
+  lines.push("Version:");
+  lines.push(`  Current: ${getVersion()}`);
+  lines.push("");
 
   // Runtime Info
   lines.push("Runtime:");
@@ -255,17 +271,8 @@ async function formatEnvInfo(identity: Identity): Promise<string> {
   lines.push("");
 
   // Dependencies
-  try {
-    const packagePath = join(__dirname, "..", "..", "..", "package.json");
-    const packageJson = JSON.parse(readFileSync(packagePath, "utf-8"));
-    const tsfulmenVersion = packageJson.dependencies?.["@fulmenhq/tsfulmen"] || "unknown";
-
-    lines.push("Dependencies:");
-    lines.push(`  tsfulmen: ${tsfulmenVersion}`);
-  } catch {
-    lines.push("Dependencies:");
-    lines.push("  (package.json not found)");
-  }
+  lines.push("Dependencies:");
+  lines.push(`  tsfulmen: ${resolveTsfulmenVersion() ?? "unknown"}`);
 
   return lines.join("\n");
 }
@@ -409,13 +416,9 @@ export function createEnvinfoCommand(identity: Identity): Command {
           maskedEnv[k] = /KEY|TOKEN|PASSWORD|SECRET/i.test(k) ? "***" : v;
         }
 
-        let version: string | undefined;
-        try {
-          const versionPath = join(__dirname, "..", "..", "..", "VERSION");
-          version = readFileSync(versionPath, "utf-8").trim();
-        } catch {
-          version = undefined;
-        }
+        // getVersion() reads the embedded version, so the compiled binary reports
+        // its real version instead of "unknown".
+        const version: string = getVersion();
 
         let configSummary:
           | {
@@ -446,14 +449,7 @@ export function createEnvinfoCommand(identity: Identity): Command {
           configSummary = undefined;
         }
 
-        let tsfulmenVersion: string | undefined;
-        try {
-          const packagePath = join(__dirname, "..", "..", "..", "package.json");
-          const packageJson = JSON.parse(readFileSync(packagePath, "utf-8"));
-          tsfulmenVersion = packageJson.dependencies?.["@fulmenhq/tsfulmen"];
-        } catch {
-          tsfulmenVersion = undefined;
-        }
+        const tsfulmenVersion: string | undefined = resolveTsfulmenVersion();
 
         const payload = {
           identity: {

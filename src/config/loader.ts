@@ -13,24 +13,43 @@
  * aliases plus workhorse invariants.
  */
 
-import { resolve } from "node:path";
-import { loadIdentity } from "@fulmenhq/tsfulmen/appidentity";
 import { loadConfig as tsfulmenLoadConfig } from "@fulmenhq/tsfulmen/config";
-import { createStructuredLogger } from "@fulmenhq/tsfulmen/logging";
+import {
+  createEnterpriseLogger,
+  type LogEvent,
+  type Logger,
+  type Sink,
+} from "@fulmenhq/tsfulmen/logging";
+import { resolveIdentity } from "../core/embedded-identity.js";
+import { resolveConfigSource } from "./embedded-config.js";
 import type { ConfigMetadata, ConfigWithMetadata, TuvanConfig } from "./types.js";
 import { ConfigInvalidError } from "./types.js";
 
 let cachedConfigWithMetadata: ConfigWithMetadata | null = null;
 
 // Logger for config operations (initialized on first use)
-let configLogger: ReturnType<typeof createStructuredLogger> | null = null;
+let configLogger: Logger | null = null;
+
+/**
+ * Sink that writes config-bootstrap diagnostics to stderr.
+ *
+ * tsfulmen's default ConsoleSink writes to stdout, which would corrupt the
+ * machine-readable output of `--json` CLI commands (e.g. `doctor --json`,
+ * `envinfo --json`) that load config. Config-load diagnostics are not program
+ * output, so they belong on stderr, keeping stdout reserved for JSON.
+ */
+class StderrSink implements Sink {
+  write(event: LogEvent): void {
+    process.stderr.write(`${JSON.stringify(event)}\n`);
+  }
+}
 
 /**
  * Get or create the config logger
  */
-function getLogger() {
+function getLogger(): Logger {
   if (!configLogger) {
-    configLogger = createStructuredLogger("tuvan.config");
+    configLogger = createEnterpriseLogger("tuvan.config", { sinks: [new StderrSink()] });
   }
   return configLogger;
 }
@@ -434,30 +453,54 @@ export async function loadConfig(): Promise<TuvanConfig> {
     return cachedConfigWithMetadata.config;
   }
 
-  const identity = await loadIdentity();
+  const identity = await resolveIdentity();
 
-  const defaultsPath = resolve("config/tuvan/v1.0.0/tuvan-defaults.yaml");
-  const schemaPath = resolve("schemas/tuvan/v1.0.0/config.schema.json");
+  // Resolve config defaults + schema as a source tsfulmen's loadConfig() accepts:
+  // on-disk paths in dev/installed runs, or build-embedded inline content in
+  // compiled single-file binaries (which carry no config/ or schemas/ directory
+  // on disk). Both forms drive full schema validation — tsfulmen >= 0.4.0
+  // resolves its metaschemas from embedded assets, so the binary validates too.
+  const source = resolveConfigSource(
+    "config/tuvan/v1.0.0/tuvan-defaults.yaml",
+    "schemas/tuvan/v1.0.0/config.schema.json",
+  );
+  if (!source) {
+    throw new ConfigInvalidError(
+      "Config defaults/schema not found on disk or embedded in the binary",
+    );
+  }
+
+  const appIdentifier = {
+    vendor: identity.app.vendor,
+    app: identity.app.binary_name,
+  };
+  const envPrefix = identity.app.env_prefix.endsWith("_")
+    ? identity.app.env_prefix.slice(0, -1)
+    : identity.app.env_prefix;
 
   logger.debug("Loading configuration", {
-    defaultsPath,
-    schemaPath,
+    source: source.kind,
     envPrefix: identity.app.env_prefix,
   });
 
   try {
-    // Load via tsfulmen (handles layers 1, 2, 3 and validation)
-    const result = await tsfulmenLoadConfig<TuvanConfig>({
-      identity: {
-        vendor: identity.app.vendor,
-        app: identity.app.binary_name,
-      },
-      defaultsPath,
-      schemaPath,
-      envPrefix: identity.app.env_prefix.endsWith("_")
-        ? identity.app.env_prefix.slice(0, -1)
-        : identity.app.env_prefix,
-    });
+    // Load via tsfulmen (handles layers 1, 2, 3 and schema validation). The two
+    // source shapes (path-based / inline) are distinct loadConfig overloads, so
+    // dispatch explicitly rather than building a union options object.
+    const result =
+      source.kind === "path"
+        ? await tsfulmenLoadConfig<TuvanConfig>({
+            identity: appIdentifier,
+            defaultsPath: source.defaultsPath,
+            schemaPath: source.schemaPath,
+            envPrefix,
+          })
+        : await tsfulmenLoadConfig<TuvanConfig>({
+            identity: appIdentifier,
+            defaults: source.defaults,
+            schema: source.schema,
+            envPrefix,
+          });
 
     // Build metadata for introspection
     const metadata: ConfigMetadata = {
