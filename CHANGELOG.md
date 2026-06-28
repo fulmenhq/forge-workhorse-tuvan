@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-06-28
+
+> **Internal tooling only** — no runtime or public API changes. Binaries are
+> functionally identical to v0.1.7; this release exercises the updated
+> release/signing path.
+
+### Changed
+
+- **Packaging**: the npm payload no longer bundles the standalone binaries
+  (`files` excludes `dist/release`; tarball ~78 kB vs ~172 MB), and the template
+  is marked `"private": true` with a `publish.yml` guard — it is a template to be
+  CDRL'd, not a published package.
+- **Release tooling**: canonical `TUVAN_RELEASE_TAG` env var (bare `TAG` kept as a
+  deprecated alias); `release-sign` runs `release-guard-tag-version` first; added
+  `make release-verify-keys` and `make release-verify-signatures`; fixed
+  `make release-checksums` (missing `$(BINARY_NAME)` arg).
+- **Developer experience**: pre-commit/pre-push hooks mirror CI's `goneat format`
+  gate (catch Markdown/YAML drift locally); `make fmt` also formats Markdown/YAML.
+
+### Fixed
+
+- `make release-checksums` no longer exits with a usage error (it now passes the
+  required binary name to `generate-checksums.sh`).
+
 ## [0.1.7] - 2026-06-26
 
 ### Fixed
