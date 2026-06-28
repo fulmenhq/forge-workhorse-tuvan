@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## v0.1.8 (2026-06-28): Internal Tooling Only
+
+Internal tooling and packaging hygiene only — **no runtime or public API changes**. Binaries are functionally identical to v0.1.7; this release exercises the updated release/signing path. Highlights: npm payload no longer bundles the binaries + template marked `"private": true` (not published — CDRL it); `TUVAN_RELEASE_TAG` canonical var; new `release-verify-keys`/`release-verify-signatures` targets; pre-commit hooks now mirror CI's format gate. See [docs/releases/v0.1.8.md](docs/releases/v0.1.8.md).
+
 ## v0.1.7 (2026-06-26): Full Standalone Compiled Binaries + De-Guardianed Hooks
 
 This release makes the cross-platform `bun --compile` release binaries work as
