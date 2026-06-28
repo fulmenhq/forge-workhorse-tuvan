@@ -1,4 +1,40 @@
 version: 1
+# Scope the format category to Markdown/YAML so `goneat assess` (the
+# pre-commit/pre-push hooks) flags whitespace/EOF/trailing issues in docs and
+# config, not just source. (JSON is intentionally excluded — tsconfig.json/biome.json
+# are JSONC with comments, which the strict JSON formatter rejects; CI's format
+# gate is yaml,markdown only.) Deeper Markdown/YAML normalization (e.g.
+# *emphasis* -> _emphasis_) is enforced by the explicit `goneat format --check`
+# step the hooks run — assess alone does not catch it.
+format:
+  eof:
+    enabled: true
+    enforce_single_newline: true
+  trailing_whitespace:
+    enabled: true
+  markdown:
+    enabled: true
+    paths:
+      - "**/*.md"
+    ignore:
+      - "**/dist/**"
+      - "**/coverage/**"
+      - "**/node_modules/**"
+      - ".plans/**"
+      - ".scratchpad/**"
+      - ".cache/**"
+  yaml:
+    enabled: true
+    paths:
+      - "**/*.yaml"
+      - "**/*.yml"
+    ignore:
+      - "**/dist/**"
+      - "**/coverage/**"
+      - "**/node_modules/**"
+      - ".plans/**"
+      - ".scratchpad/**"
+      - ".cache/**"
 lint:
   yamllint:
     enabled: true

@@ -10,7 +10,7 @@
 .PHONY: all help bootstrap bootstrap-force hooks-ensure tools sync dependencies lint fmt test build build-all clean version version-set version-propagate
 .PHONY: version-bump-major version-bump-minor version-bump-patch version-bump-calver
 .PHONY: release-check release-prepare release-build release-guard-tag-version typecheck check-all quality precommit prepush test-watch test-coverage run openapi
-.PHONY: validate-app-identity sync-embedded-identity verify-embedded-identity doctor release-download release-checksums release-sign release-export-keys release-verify-checksums release-upload-provenance release-clean
+.PHONY: validate-app-identity sync-embedded-identity verify-embedded-identity doctor release-download release-checksums release-sign release-export-keys release-verify-checksums release-verify-keys release-verify-signatures release-upload-provenance release-clean
 
 # Variables
 VERSION := $(shell cat VERSION 2>/dev/null || echo "0.0.1")
@@ -18,6 +18,10 @@ BINARY_NAME := tuvan
 BIN_DIR := ./bin
 DIST_DIR := ./dist
 DIST_RELEASE := ./dist/release
+
+# Release tag for the local signing/upload flow. Canonical var is
+# TUVAN_RELEASE_TAG (app-prefixed); bare TAG is kept as a deprecated alias.
+RELEASE_TAG := $(or $(TUVAN_RELEASE_TAG),$(TAG))
 
 # ============================================================================
 # RELEASE SIGNING CONFIGURATION (optional - delete this section if not needed)
@@ -145,6 +149,8 @@ help: ## Show this help message
 	@echo "  release-sign              - Sign checksum manifests (minisign + optional PGP)"
 	@echo "  release-export-keys       - Export public signing keys to release dir"
 	@echo "  release-verify-checksums  - Verify checksums against artifacts"
+	@echo "  release-verify-keys       - Verify exported public signing keys"
+	@echo "  release-verify-signatures - Verify signatures over the checksum manifests"
 	@echo "  release-upload-provenance - Upload provenance to GitHub release"
 	@echo "  release-clean             - Clean release artifacts directory"
 	@echo ""
@@ -301,12 +307,18 @@ lint: ## Run linting checks
 	fi
 	@echo "All linting passed"
 
-fmt: ## Format code
+fmt: ## Format code (TS via biome; Markdown/YAML/JSON via goneat)
 	@echo "Formatting TypeScript/JavaScript..."
 	@if command -v bun >/dev/null 2>&1; then \
 		bunx biome check --write src/; \
 	else \
 		npx biome check --write src/; \
+	fi
+	@echo "Formatting Markdown/YAML (goneat)..."
+	@if command -v goneat >/dev/null 2>&1; then \
+		goneat format --types yaml,markdown; \
+	else \
+		echo "  goneat not found on PATH — skipping doc/config formatting (run 'make bootstrap')"; \
 	fi
 	@echo "Code formatted"
 
@@ -439,31 +451,35 @@ doctor: ## Run diagnostic checks (CLI)
 # RELEASE SIGNING WORKFLOW (optional - delete if not needed)
 # ============================================================================
 #
-# TAG FORMAT: vX.Y.Z (with 'v' prefix, e.g., v1.2.3)
+# RELEASE TAG: set TUVAN_RELEASE_TAG=vX.Y.Z (with 'v' prefix, e.g., v1.2.3).
 #   - The 'v' prefix is REQUIRED for GitHub release conventions
 #   - Scripts validate format and reject bare semver (1.2.3)
+#   - `TAG=vX.Y.Z` is still accepted as a deprecated alias
 #
 # Workflow (run locally AFTER CI builds draft release):
-#   1. make release-download TAG=v1.2.3   # Download CI-built artifacts
-#   2. make release-checksums             # Generate SHA256SUMS, SHA512SUMS
-#   3. make release-sign TAG=v1.2.3       # Sign manifests (minisign + PGP)
-#   4. make release-export-keys           # Export public keys for verification
-#   5. make release-verify-checksums      # Sanity check before upload
-#   6. make release-upload-provenance TAG=v1.2.3  # Upload to GitHub release
+#   1. make release-download TUVAN_RELEASE_TAG=v1.2.3   # Download CI-built artifacts
+#   2. make release-checksums                           # Generate SHA256SUMS, SHA512SUMS
+#   3. make release-sign TUVAN_RELEASE_TAG=v1.2.3       # Guard + sign manifests (minisign + PGP)
+#   4. make release-export-keys                         # Export public keys for verification
+#   5. make release-verify-checksums                    # Verify artifacts vs checksums
+#   6. make release-verify-keys                         # Verify public keys are present/well-formed
+#   7. make release-verify-signatures                   # Verify signatures over the manifests
+#   8. make release-upload-provenance TUVAN_RELEASE_TAG=v1.2.3  # Upload to GitHub release
 #
 # See signing configuration section above for environment variable setup.
 #
 
-release-download: ## Download assets from GitHub draft release (TAG=vX.Y.Z required)
-	@if [ -z "$(TAG)" ]; then echo "TAG not set. Usage: make release-download TAG=vX.Y.Z (v prefix required)"; exit 1; fi
-	@./scripts/release-download.sh "$(TAG)" "$(DIST_RELEASE)"
+release-download: ## Download assets from GitHub draft release (TUVAN_RELEASE_TAG=vX.Y.Z)
+	@if [ -z "$(RELEASE_TAG)" ]; then echo "Release tag not set. Usage: make release-download TUVAN_RELEASE_TAG=vX.Y.Z (v prefix required)"; exit 1; fi
+	@./scripts/release-download.sh "$(RELEASE_TAG)" "$(DIST_RELEASE)"
 
 release-checksums: ## Generate SHA256SUMS and SHA512SUMS from downloaded artifacts
 	@./scripts/generate-checksums.sh "$(DIST_RELEASE)" "$(BINARY_NAME)"
 
-release-sign: ## Sign checksum manifests (minisign + optional PGP, TAG=vX.Y.Z required)
-	@if [ -z "$(TAG)" ]; then echo "TAG not set. Usage: make release-sign TAG=vX.Y.Z (v prefix required)"; exit 1; fi
-	@SIGNING_APP_NAME=$(SIGNING_APP_NAME) SIGNING_ENV_PREFIX=$(SIGNING_ENV_PREFIX) ./scripts/sign-release-manifests.sh "$(TAG)" "$(DIST_RELEASE)"
+release-sign: ## Guard tag/version, then sign checksum manifests (TUVAN_RELEASE_TAG=vX.Y.Z)
+	@if [ -z "$(RELEASE_TAG)" ]; then echo "Release tag not set. Usage: make release-sign TUVAN_RELEASE_TAG=vX.Y.Z (v prefix required)"; exit 1; fi
+	@TUVAN_RELEASE_TAG="$(RELEASE_TAG)" ./scripts/release-guard-tag-version.sh
+	@SIGNING_APP_NAME=$(SIGNING_APP_NAME) SIGNING_ENV_PREFIX=$(SIGNING_ENV_PREFIX) ./scripts/sign-release-manifests.sh "$(RELEASE_TAG)" "$(DIST_RELEASE)"
 
 release-export-keys: ## Export public signing keys to release dir
 	@SIGNING_APP_NAME=$(SIGNING_APP_NAME) SIGNING_ENV_PREFIX=$(SIGNING_ENV_PREFIX) ./scripts/export-release-keys.sh "$(DIST_RELEASE)"
@@ -471,9 +487,15 @@ release-export-keys: ## Export public signing keys to release dir
 release-verify-checksums: ## Verify checksums against artifacts
 	@./scripts/verify-checksums.sh "$(DIST_RELEASE)"
 
-release-upload-provenance: ## Upload provenance to GitHub release (TAG=vX.Y.Z required)
-	@if [ -z "$(TAG)" ]; then echo "TAG not set. Usage: make release-upload-provenance TAG=vX.Y.Z (v prefix required)"; exit 1; fi
-	@./scripts/release-upload-provenance.sh "$(TAG)" "$(DIST_RELEASE)"
+release-verify-keys: ## Verify exported public signing keys are present and well-formed
+	@./scripts/verify-keys.sh "$(DIST_RELEASE)" "$(BINARY_NAME)"
+
+release-verify-signatures: ## Verify minisign + PGP signatures over the checksum manifests
+	@./scripts/verify-signatures.sh "$(DIST_RELEASE)" "$(BINARY_NAME)"
+
+release-upload-provenance: ## Upload provenance to GitHub release (TUVAN_RELEASE_TAG=vX.Y.Z)
+	@if [ -z "$(RELEASE_TAG)" ]; then echo "Release tag not set. Usage: make release-upload-provenance TUVAN_RELEASE_TAG=vX.Y.Z (v prefix required)"; exit 1; fi
+	@./scripts/release-upload-provenance.sh "$(RELEASE_TAG)" "$(DIST_RELEASE)"
 
 release-clean: ## Clean release artifacts directory
 	@echo "Cleaning release artifacts..."

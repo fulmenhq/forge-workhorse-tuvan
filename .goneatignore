@@ -1,0 +1,18 @@
+# Goneat ignore patterns (honored by `goneat format` AND `goneat assess`).
+# Keep formatters/linters off generated, vendored, and ephemeral content.
+
+# Build output (compiled JS + cross-platform release binaries/checksums).
+dist/
+coverage/
+
+# Dependencies.
+node_modules/
+
+# Test fixtures — formatting them would "fix" the very inputs tests rely on.
+**/fixtures/
+**/__fixtures__/
+
+# Ephemeral / local-only working dirs.
+.plans/
+.scratchpad/
+.cache/
