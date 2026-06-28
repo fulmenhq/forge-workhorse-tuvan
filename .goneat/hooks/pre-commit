@@ -74,4 +74,15 @@ fi
 # Use goneat's orchestrated assessment (manifest-driven)
 "$GONEAT_BIN" assess --hook pre-commit --hook-manifest "$REPO_ROOT/.goneat/hooks.yaml" --staged-only --package-mode
 
+# CI parity: `goneat assess` (above) only checks format at the whitespace/EOF
+# level, so it misses Markdown/YAML normalization (e.g. *emphasis* -> _emphasis_)
+# that CI's `goneat format` gate enforces. Mirror that gate here so doc-format
+# drift fails locally instead of in CI. Honors .goneatignore.
+# NOTE: manually added for CI parity — re-add if you regenerate this hook.
+echo "🧹 Checking Markdown/YAML formatting (CI parity)..."
+if ! "$GONEAT_BIN" format --check --types yaml,markdown; then
+  echo "❌ Formatting check failed. Run 'make fmt' (or 'goneat format --types yaml,markdown') and re-stage."
+  exit 1
+fi
+
 echo "✅ Pre-commit validation passed!"

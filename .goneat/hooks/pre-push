@@ -81,4 +81,14 @@ fi
 # Use goneat's orchestrated assessment (manifest-driven)
 "$GONEAT_BIN" assess --hook pre-push --hook-manifest "$REPO_ROOT/.goneat/hooks.yaml" --staged-only --package-mode
 
+# CI parity: mirror CI's `goneat format` gate so Markdown/YAML normalization drift
+# (e.g. *emphasis* -> _emphasis_), which `goneat assess` does not catch, fails
+# locally instead of in CI. Honors .goneatignore.
+# NOTE: manually added for CI parity — re-add if you regenerate this hook.
+echo "🧹 Checking Markdown/YAML formatting (CI parity)..."
+if ! "$GONEAT_BIN" format --check --types yaml,markdown; then
+  echo "❌ Formatting check failed. Run 'make fmt' (or 'goneat format --types yaml,markdown') and re-stage."
+  exit 1
+fi
+
 echo "✅ Pre-push validation passed!"

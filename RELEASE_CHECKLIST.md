@@ -106,20 +106,29 @@ Follow the Fulmen "manifest-only" provenance pattern:
 
 **Signing workflow (run locally after CI creates draft):**
 
+> The release tag is set via `TUVAN_RELEASE_TAG=v<version>` (the `v` prefix is required). `TAG=v<version>` is still accepted as a deprecated alias.
+
 - [ ] Download CI-built artifacts:
 
   ```bash
   make release-clean
-  make release-download TAG=v<version>
+  make release-download TUVAN_RELEASE_TAG=v<version>
   ```
 
-- [ ] Verify checksums match CI-generated manifests:
+- [ ] Generate checksum manifests from the downloaded artifacts:
+
+  ```bash
+  make release-checksums
+  ```
+
+- [ ] Verify the artifacts against the manifests:
 
   ```bash
   make release-verify-checksums
   ```
 
-- [ ] Sign manifests (minisign required; PGP optional):
+- [ ] Sign manifests (minisign required; PGP optional). `release-sign` first runs
+      `release-guard-tag-version` to assert `TUVAN_RELEASE_TAG` == `VERSION` == `package.json`:
 
   ```bash
   export TUVAN_MINISIGN_KEY=/path/to/tuvan.key
@@ -131,14 +140,16 @@ Follow the Fulmen "manifest-only" provenance pattern:
   export GPG_TTY="$(tty)"
   gpg-connect-agent updatestartuptty /bye
 
-  make release-sign TAG=v<version>
+  make release-sign TUVAN_RELEASE_TAG=v<version>
   ```
 
 - [ ] Export public keys: `make release-export-keys`
+- [ ] Verify the exported keys are present/well-formed: `make release-verify-keys`
+- [ ] Verify the signatures over the manifests: `make release-verify-signatures`
 - [ ] Upload provenance and publish release:
 
   ```bash
-  make release-upload-provenance TAG=v<version>
+  make release-upload-provenance TUVAN_RELEASE_TAG=v<version>
   ```
 
 **CDRL note**: Downstream users should refit the env var prefix (e.g., `TUVAN_MINISIGN_KEY` -> `MYAPI_MINISIGN_KEY`). See the `SIGNING_ENV_PREFIX` variable in the Makefile.
